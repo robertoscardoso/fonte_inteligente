@@ -6,20 +6,19 @@
 
 class Energia
 {
-    public:
-        Energia(uint8_t canal);
+public:
+    Energia(uint8_t canal);
 
-        virtual int16_t getValorBruto();
+    virtual int16_t getValorBruto();
 
-        virtual float getTensao();
+    virtual float getTensao();
+    static void inicializar();
+    virtual ~Energia() {}
 
-        virtual ~Energia() {}
-
-
-    protected:
-        uint8_t canal;
-        static Adafruit_ADS1115 adc;
-        static bool inicializado;   
+protected:
+    uint8_t canal;
+    static Adafruit_ADS1115 adc;
+    static bool inicializado;
 };
 
 #endif

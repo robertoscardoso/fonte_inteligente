@@ -1,46 +1,56 @@
-#include "Arduino.h"
-#include <Adafruit_ADS1X15.h>
 #include "Energia.h"
-
+#include <Wire.h>
 
 Adafruit_ADS1115 Energia::adc;
 bool Energia::inicializado = false;
 
+Energia::Energia(uint8_t canal) : canal(canal)
+{
+    // Não inicializa aqui — o setup chamará inicializar()
+}
 
+// ---------------------------------------------------------
+// Inicializa o ADC externo apenas uma vez, após o Wire estar ativo
+// ---------------------------------------------------------
+void Energia::inicializar()
+{
+    if (!inicializado)
+    {
 
-Energia::Energia(uint8_t canal): canal(canal){
-    if(!inicializado){
-        if(!adc.begin()){
-            Serial.println("Erro ao inicializar o ADC externo");
+        if (!adc.begin(0X48))
+        {
+            Serial.println("❌ Erro ao inicializar o ADC externo (ADS1115)");
+            return;
         }
-        adc.setGain(GAIN_TWO);
+
+        adc.setGain(GAIN_ONE);
         inicializado = true;
+        Serial.println("✅ ADC externo (ADS1115) inicializado com sucesso!");
+        delay(2000);
     }
 }
 
-
-
-int16_t Energia::getValorBruto(){
-
+// ---------------------------------------------------------
+int16_t Energia::getValorBruto()
+{
+    if (!inicializado)
+    {
+        Serial.println("⚠️ ADC não inicializado!");
+        return 0;
+    }
     return adc.readADC_SingleEnded(this->canal);
 }
 
-
-
-float Energia::getTensao() {
-    int16_t valorBruto = getValorBruto();
-
-    // Conversão depende do ganho configurado
-    float multiplier = 0.0;
-
-    switch (adc.getGain()) {
-        case GAIN_TWOTHIRDS: multiplier = 0.1875F; break; // ±6.144V
-        case GAIN_ONE:       multiplier = 0.125F;  break; // ±4.096V
-        case GAIN_TWO:       multiplier = 0.0625F; break; // ±2.048V
-        case GAIN_FOUR:      multiplier = 0.03125F;break; // ±1.024V
-        case GAIN_EIGHT:     multiplier = 0.015625F;break;// ±0.512V
-        case GAIN_SIXTEEN:   multiplier = 0.0078125F;break;// ±0.256V
+// ---------------------------------------------------------
+float Energia::getTensao()
+{
+    if (!inicializado)
+    {
+        Serial.println("⚠️ ADC não inicializado!");
+        return 0.0;
     }
 
-    return valorBruto * multiplier / 1000.0F; // converte mV -> V
+    int16_t valorBruto = getValorBruto();
+
+    return adc.computeVolts(valorBruto);;
 }

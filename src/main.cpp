@@ -6,8 +6,8 @@
 // -------------------------------------------------------------
 // DECLARAÇÕES GLOBAIS
 // -------------------------------------------------------------
-Bateria B_18650(0, 4.2, 2.7);
-RedeExterna tomada(1);
+Bateria B_18650(0, 3.2, 0.0);
+RedeExterna tomada(3);
 
 // -----------------------------------------------------------------------------
 // 1. FUNÇÃO AUXILIAR PARA O ENUM DA TOMADA
@@ -16,9 +16,9 @@ String statusTomadaToString(statusRedeExterna status)
 {
     switch (status)
     {
-    case ATIVADA:
+    case ATIVADO:
         return "ATIVADA";
-    case DESATIVADA:
+    case DESATIVADO:
         return "DESATIVADA";
     default:
         return "DESCONHECIDO";
@@ -39,6 +39,16 @@ String statusBateriaToString(BateriaStatus status)
     default:
         return "DESCONHECIDO";
     }
+}
+
+// -----------------------------------------------------------------------------
+void setup()
+{
+    delay(3000);
+    Serial.begin(115200);
+    Serial.println("Sistema de Monitoramento de Energia Inicializado!");
+
+    Energia::inicializar();
 }
 // -----------------------------------------------------------------------------
 
@@ -75,5 +85,5 @@ void loop()
 
     Serial.println("=========================================\n");
 
-    delay(5000); // Espera 5 segundos
+    delay(1000); // Espera 5 segundos
 }

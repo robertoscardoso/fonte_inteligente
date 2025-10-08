@@ -5,8 +5,8 @@
 #include "Energia.h"
 
 enum statusRedeExterna{
-    ATIVADA,
-    DESATIVADA
+    ATIVADO,
+    DESATIVADO
 };
 
 class RedeExterna: public Energia{
