@@ -52,38 +52,58 @@ void setup()
 }
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+
 void loop()
 {
-    // --- OBTENÇÃO DOS DADOS DA BATERIA ---
-    float tensaoBateria = B_18650.getTensao(); // Presumindo que este método já existe
-    float porcentagem = B_18650.getPorcentagem();
+    // --- OBTENÇÃO DOS DADOS DE AMBAS AS FONTES ---
+    // Dados da Bateria
+    float tensaoBateria = B_18650.getTensao();
+    float porcentagem = B_18650.getPorcentagem(); // Isso também atualiza o status da bateria
     String statusBateria = statusBateriaToString(B_18650.getStatus());
 
-    // --- OBTENÇÃO DOS DADOS DA TOMADA (NOVO DADO!) ---
+    // Dados da Rede Externa (Tomada)
+    float tensaoTomada = tomada.getTensao();
     String statusTomada = statusTomadaToString(tomada.getStatus());
-    float tensaoTomada = tomada.getTensao(); // <-- CHAMADA DO NOVO MÉTODO
 
     // --- IMPRESSÃO DOS DADOS ---
-
     Serial.println("\n=========================================");
-    Serial.println("            DADOS DO SISTEMA             ");
+    Serial.println("        MONITORAMENTO DE ENERGIA         ");
     Serial.println("=========================================");
 
-    // Dados da Rede Externa (Tomada)
-    Serial.println("STATUS DA REDE EXTERNA:");
-    Serial.println(" -> Status:      " + statusTomada);
-    // Exibe a tensão da tomada
-    Serial.println(" -> Tensão Atual: " + String(tensaoTomada, 1) + "V");
+    // --- INDICAÇÃO DA FONTE DE ENERGIA ATIVA ---
+    // A lógica para decidir a fonte ativa permanece a mesma.
+    if (tensaoTomada > 0.2)
+    {
+        Serial.println(" > FONTE ATIVA: REDE EXTERNA <");
+        tomada.setStatus(ATIVADO);
+        B_18650.setStatus(DESATIVADA);
+    }
+    else
+    {
+        Serial.println(" > FONTE ATIVA: BATERIA <");
+        tomada.setStatus(DESATIVADO);
+        B_18650.setStatus(ATIVADA);
+    }
 
     Serial.println("-----------------------------------------");
 
-    // Dados da Bateria
+    // --- DADOS DA REDE EXTERNA (SEMPRE EXIBIDOS) ---
+    Serial.println("DADOS DA REDE EXTERNA:");
+    Serial.println(" -> Status:       " + statusTomada);
+    Serial.println(" -> Tensão Atual:  " + String(tensaoTomada, 1) + "V");
+
+    Serial.println("-----------------------------------------");
+
+    // --- DADOS DA BATERIA (SEMPRE EXIBIDOS) ---
     Serial.println("DADOS DA BATERIA (18650):");
-    Serial.println(" -> Status:      " + statusBateria);
-    Serial.println(" -> Tensão Atual: " + String(tensaoBateria, 2) + "V");
-    Serial.println(" -> Porcentagem: " + String(porcentagem, 1) + "%");
+    Serial.println(" -> Status:       " + statusBateria);
+    Serial.println(" -> Tensão Atual:  " + String(tensaoBateria, 2) + "V");
+    Serial.println(" -> Porcentagem:  " + String(porcentagem, 1) + "%");
 
     Serial.println("=========================================\n");
 
-    delay(1000); // Espera 5 segundos
+    delay(1000); // Espera 1 segundo antes da próxima atualização.
 }
