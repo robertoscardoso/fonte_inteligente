@@ -8,6 +8,7 @@ class WiFiManager{
     WiFiManager();
 
     bool iniciarAP(const char* ssid, const char* password);
+    bool conectar(const char* ssid, const char* password);
 
     IPAddress getIP();
 

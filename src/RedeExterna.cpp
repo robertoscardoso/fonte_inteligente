@@ -3,7 +3,7 @@
 
 RedeExterna::RedeExterna(uint8_t canal)
     :Energia(canal){
-        this->statusAtual = DESATIVADA;
+        this->statusAtual = DESATIVADO;
 }
 
 
