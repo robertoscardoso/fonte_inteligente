@@ -1,18 +1,21 @@
+// INCLUDES DO PROJETO
 #include "Arduino.h"
 #include "Energia.h"
 #include "RedeExterna.h"
 #include "Bateria.h"
 #include "WiFiManager.h"
-#include "GerenciadorDeLogs.h" // <-- INCLUI A NOVA CLASSE
+#include "GerenciadorDeLogs.h"
 #include <NTPClient.h>
 #include <time.h>
-#include <config_ext.h>
+
+// INCLUI A NOSSA NOVA CLASSE
+#include "NotificadorTelegram.h"
 
 // -------------------------------------------------------------
 // DECLARAÇÕES GLOBAIS
 // -------------------------------------------------------------
 Bateria B_18650(3, 3.2, 0.0);
-RedeExterna tomada(1);
+RedeExterna tomada(2);
 WiFiManager rede_wifi;
 
 // Define o caminho do banco de dados
@@ -23,8 +26,17 @@ GerenciadorDeLogs gerenciadorDeLogs(CAMINHO_DB);
 bool redeExternaEstavaAtiva = false;
 int transicao_delay = 3000;
 
+// --- CONFIGURAÇÕES DO TELEGRAM ---
+// Substitua pelos seus dados obtidos com o Botfather e IDBot
+#define BOT_TOKEN "8033617155:AAGaXf8IOH_CRTGgP2V5nQIQ35GscalG0cY"
+#define CHAT_ID "1561936580"
+
+// Cria uma instância global da nossa nova classe
+NotificadorTelegram notificador(BOT_TOKEN, CHAT_ID);
+// ---------------------------------
+
 // -----------------------------------------------------------------------------
-// 1. FUNÇÕES AUXILIARES PARA ENUMS
+// 1. FUNÇÕES AUXILIARES PARA ENUMS (mantidas como estão)
 // -----------------------------------------------------------------------------
 String statusTomadaToString(statusRedeExterna status)
 {
@@ -47,7 +59,7 @@ String statusBateriaToString(BateriaStatus status)
 }
 
 // -----------------------------------------------------------------------------
-// 2. CONFIGURAÇÕES E FUNÇÕES NTP
+// 2. CONFIGURAÇÕES E FUNÇÕES NTP (mantidas como estão)
 // -----------------------------------------------------------------------------
 WiFiUDP ntpUDP;
 const long utcOffsetInSeconds = -10800;
@@ -73,22 +85,29 @@ void setup()
     Serial.println("Sistema de Monitoramento de Energia Inicializado!");
 
     rede_wifi.conectar("BORGES", "gomugomu");
+    
+    // --- USA A NOSSA CLASSE PARA INICIALIZAR O TELEGRAM ---
+    notificador.inicializar();
+    // ----------------------------------------------------
+
     Energia::inicializar();
 
     timeClient.begin();
     timeClient.update();
 
-    // Inicializa o gerenciador de logs. Se falhar, interrompe a execução.
     if (!gerenciadorDeLogs.iniciar())
     {
         Serial.println("Falha crítica ao inicializar o Gerenciador de Logs. Sistema parado.");
-        while (1); // Loop infinito para travar o microcontrolador
+        while (1);
     }
 
-    // Exibe os logs que já estavam salvos
     Serial.println("\n--- Iniciando Leitura do Histórico de Eventos ---");
     gerenciadorDeLogs.lerTodosOsLogs();
     Serial.println("--- Leitura do Histórico Concluída ---");
+
+    // --- USA A NOSSA CLASSE PARA ENVIAR A MENSAGEM INICIAL ---
+    notificador.enviarMensagemInicializacao();
+    // ---------------------------------------------------------
 
     Serial.println("Aguardando 5 segundos para iniciar o monitoramento...");
     delay(5000);
@@ -100,12 +119,10 @@ void setup()
 // -----------------------------------------------------------------------------
 void loop()
 {
-    // 1. OBTENÇÃO DOS DADOS
     float porcentagem = B_18650.getPorcentagem();
     float tensaoTomada = tomada.getTensao();
-    bool redeExternaAtiva = (tensaoTomada > 0.2);
+    bool redeExternaAtiva = (tensaoTomada > 1.0);
 
-    // 2. DETECÇÃO DE TRANSIÇÃO E AÇÃO
     if (redeExternaAtiva != redeExternaEstavaAtiva)
     {
         timeClient.update();
@@ -119,6 +136,11 @@ void loop()
         {
             Serial.println("A rede externa VOLTOU as: " + dataHoraAtual);
             tipo_evento = "RETORNO";
+            
+            // --- USA A NOSSA CLASSE PARA ENVIAR O AVISO DE RETORNO ---
+            notificador.enviarAvisoRetornoEnergia(dataHoraAtual);
+            // ----------------------------------------------------------
+
             delay(transicao_delay);
             tomada.setStatus(ATIVADO);
             B_18650.setStatus(DESATIVADA);
@@ -127,25 +149,27 @@ void loop()
         {
             Serial.println("A rede externa CAIU as: " + dataHoraAtual);
             tipo_evento = "QUEDA";
+
+            // --- USA A NOSSA CLASSE PARA ENVIAR O ALERTA DE QUEDA ---
+            notificador.enviarAlertaQuedaEnergia(dataHoraAtual, porcentagem);
+            // ---------------------------------------------------------
+            
             delay(transicao_delay);
             tomada.setStatus(DESATIVADO);
             B_18650.setStatus(ATIVADA);
         }
 
-        // --- SALVANDO O LOG USANDO A NOVA CLASSE ---
         gerenciadorDeLogs.registrarEvento(dataHoraAtual, tipo_evento, porcentagem);
-        // -------------------------------------------
-
-        redeExternaEstavaAtiva = redeExternaAtiva; // Atualiza o estado para a próxima verificação
+        redeExternaEstavaAtiva = redeExternaAtiva;
         Serial.println("*\n");
     }
 
     timeClient.update();
 
-    // 3. IMPRESSÃO DOS DADOS DE MONITORAMENTO
+    // O restante do loop de monitoramento permanece igual...
     String dataHoraLog = obterDataHoraFormatada(timeClient);
     Serial.println("\n=========================================");
-    Serial.println("         MONITORAMENTO DE ENERGIA          ");
+    Serial.println("        MONITORAMENTO DE ENERGIA         ");
     Serial.println("DATA/HORA: " + dataHoraLog);
     Serial.println("=========================================");
     Serial.println(redeExternaEstavaAtiva ? " > FONTE ATIVA: REDE EXTERNA <" : " > FONTE ATIVA: BATERIA <");
