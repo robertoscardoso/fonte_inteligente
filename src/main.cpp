@@ -3,26 +3,25 @@
 #include "RedeExterna.h"
 #include "Bateria.h"
 #include "WiFiManager.h"
+#include "GerenciadorDeLogs.h" // <-- INCLUI A NOVA CLASSE
 #include <NTPClient.h>
 #include <time.h>
-#include "LittleFS.h"
 #include <config_ext.h>
-#include <sqlite3.h> // O principal header
+
 // -------------------------------------------------------------
-// DECLARAÇÕES GLOBAIS E CONFIGURAÇÕES DO SQLITE
+// DECLARAÇÕES GLOBAIS
 // -------------------------------------------------------------
 Bateria B_18650(3, 3.2, 0.0);
 RedeExterna tomada(1);
 WiFiManager rede_wifi;
+
+// Define o caminho do banco de dados
+#define CAMINHO_DB "/littlefs/log_energia.db"
+// Cria uma instância do nosso gerenciador de logs
+GerenciadorDeLogs gerenciadorDeLogs(CAMINHO_DB);
+
 bool redeExternaEstavaAtiva = false;
 int transicao_delay = 3000;
-
-// Configurações do SQLite
-#define DB_PATH "/littlefs/log_energia.db" // Caminho do banco de dados na LittleFS
-sqlite3 *db;                               // Objeto de banco de dados SQLite
-
-// Flag para inicialização do LittleFS
-#define FORMAT_LITTLEFS_IF_FAILED true
 
 // -----------------------------------------------------------------------------
 // 1. FUNÇÕES AUXILIARES PARA ENUMS
@@ -31,12 +30,9 @@ String statusTomadaToString(statusRedeExterna status)
 {
     switch (status)
     {
-    case ATIVADO:
-        return "ATIVADA";
-    case DESATIVADO:
-        return "DESATIVADA";
-    default:
-        return "DESCONHECIDO";
+    case ATIVADO: return "ATIVADA";
+    case DESATIVADO: return "DESATIVADA";
+    default: return "DESCONHECIDO";
     }
 }
 
@@ -44,12 +40,9 @@ String statusBateriaToString(BateriaStatus status)
 {
     switch (status)
     {
-    case ATIVADA:
-        return "ATIVADA";
-    case DESATIVADO:
-        return "DESATIVADA";
-    default:
-        return "DESCONHECIDO";
+    case ATIVADA: return "ATIVADA";
+    case DESATIVADO: return "DESATIVADA";
+    default: return "DESCONHECIDO";
     }
 }
 
@@ -61,71 +54,13 @@ const long utcOffsetInSeconds = -10800;
 const char *ntpServer = "a.st1.ntp.br";
 NTPClient timeClient(ntpUDP, ntpServer, utcOffsetInSeconds, 60000);
 
-// Função para obter Data e Hora completas
 String obterDataHoraFormatada(NTPClient &client)
 {
     time_t epochTime = client.getEpochTime();
-    struct tm *timeInfo;
-    timeInfo = localtime(&epochTime);
+    struct tm *timeInfo = localtime(&epochTime);
     char buffer[30];
     strftime(buffer, 30, "%d/%m/%Y %H:%M:%S", timeInfo);
     return String(buffer);
-}
-
-// -----------------------------------------------------------------------------
-// 3. FUNÇÕES SQLITE
-// -----------------------------------------------------------------------------
-
-// Função de Callback para processar os resultados do SELECT
-static int callback(void *data, int argc, char **argv, char **azColName)
-{
-    Serial.printf("| ");
-    for (int i = 0; i < argc; i++)
-    {
-        // Imprime o nome da coluna e o valor (Ex: DATA_HORA: 20/10/2025 10:30:00)
-        Serial.printf("%s: %s | ", azColName[i], argv[i] ? argv[i] : "NULL");
-    }
-    Serial.println();
-    return 0;
-}
-
-// Função para executar comandos SQL (INSERT, CREATE, SELECT, etc.)
-void execSQL(const String &sql)
-{
-    char *zErrMsg = 0;
-    const char *sql_c = sql.c_str();
-
-    // Executa o comando
-    int rc = sqlite3_exec(db, sql_c, callback, (void *)"Resultados", &zErrMsg);
-
-    if (rc != SQLITE_OK)
-    {
-        Serial.printf("ERRO SQL (%d): %s\n", rc, zErrMsg);
-        sqlite3_free(zErrMsg);
-    }
-}
-
-// Função de leitura/consulta de logs no SQLite
-void readLogSQL()
-{
-    // Verifica se o DB está aberto
-    if (!db)
-    {
-        Serial.println("ERRO: O Banco de Dados não está aberto.");
-        return;
-    }
-
-    Serial.println("\n-----------------------------------------");
-    Serial.println(" HISTÓRICO DE EVENTOS SALVOS (SQLite) ");
-    Serial.println("-----------------------------------------");
-
-    // Seleciona as colunas relevantes, ordenando do mais recente para o mais antigo
-    const char *sql_select = "SELECT DATA_HORA, TIPO, BATERIA_PERCENTUAL FROM LOG_ENERGIA ORDER BY ID DESC;";
-
-    // Converte para String para usar a função execSQL
-    execSQL(String(sql_select));
-
-    Serial.println("-----------------------------------------\n");
 }
 
 // -----------------------------------------------------------------------------
@@ -136,164 +71,94 @@ void setup()
     delay(3000);
     Serial.begin(115200);
     Serial.println("Sistema de Monitoramento de Energia Inicializado!");
+
     rede_wifi.conectar("BORGES", "gomugomu");
     Energia::inicializar();
 
     timeClient.begin();
     timeClient.update();
 
-    // 1. Inicializar LittleFS (necessário para o SQLite salvar o arquivo)
-    if (!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED))
+    // Inicializa o gerenciador de logs. Se falhar, interrompe a execução.
+    if (!gerenciadorDeLogs.iniciar())
     {
-        Serial.println("ERRO: Falha na inicialização do LittleFS!");
-        return;
+        Serial.println("Falha crítica ao inicializar o Gerenciador de Logs. Sistema parado.");
+        while (1); // Loop infinito para travar o microcontrolador
     }
-    Serial.println("LittleFS montado com sucesso.");
 
-    // 2. Abrir/Criar o Banco de Dados
-    int rc = sqlite3_open(DB_PATH, &db);
-    if (rc)
-    {
-        Serial.printf("Não foi possível abrir/criar o DB: %s\n", sqlite3_errmsg(db));
-        return;
-    }
-    Serial.println("Banco de Dados SQLite aberto com sucesso.");
-
-    // 3. Criar Tabela de Log (se não existir)
-    const char *sql_create =
-        "CREATE TABLE IF NOT EXISTS LOG_ENERGIA ("
-        "ID INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "DATA_HORA TEXT NOT NULL,"
-        "TIPO TEXT NOT NULL,"                 // Armazena 'QUEDA' ou 'RETORNO'
-        "BATERIA_PERCENTUAL REAL NOT NULL);"; // Armazena o percentual da bateria
-
-    execSQL(String(sql_create));
-
-    // NOVIDADE: Exibir logs salvos usando SQLite
+    // Exibe os logs que já estavam salvos
     Serial.println("\n--- Iniciando Leitura do Histórico de Eventos ---");
-    readLogSQL(); // Chama a nova função de leitura via SQL
+    gerenciadorDeLogs.lerTodosOsLogs();
     Serial.println("--- Leitura do Histórico Concluída ---");
 
-    // Espera 5 segundos (5000 ms) antes de iniciar o loop principal
     Serial.println("Aguardando 5 segundos para iniciar o monitoramento...");
     delay(5000);
     Serial.println("Iniciando loop principal...");
 }
-// -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// LOOP PRINCIPAL
+// -----------------------------------------------------------------------------
 void loop()
 {
-    // --------------------------------------------------------------------------
     // 1. OBTENÇÃO DOS DADOS
-    // --------------------------------------------------------------------------
-
-    // Dados da Bateria
-    float tensaoBateria = B_18650.getTensao();
-    float porcentagem = B_18650.getPorcentagem(); // Percentual é necessário para o log
-    String statusBateria = statusBateriaToString(B_18650.getStatus());
-
-    // Dados da Rede Externa (Tomada)
+    float porcentagem = B_18650.getPorcentagem();
     float tensaoTomada = tomada.getTensao();
-    String statusTomada = statusTomadaToString(tomada.getStatus());
-
-    // Define o ESTADO ATUAL (variável local)
     bool redeExternaAtiva = (tensaoTomada > 0.2);
 
-    // --------------------------------------------------------------------------
-    // 2. DETECÇÃO DE BORDA E COMUTAÇÃO (A Lógica de Ação Única)
-    // --------------------------------------------------------------------------
-
+    // 2. DETECÇÃO DE TRANSIÇÃO E AÇÃO
     if (redeExternaAtiva != redeExternaEstavaAtiva)
     {
-        // Garante a hora exata do evento de transição
         timeClient.update();
         String dataHoraAtual = obterDataHoraFormatada(timeClient);
+        String tipo_evento;
 
         Serial.println("\n*");
         Serial.println("*** TRANSIÇÃO DE ENERGIA DETECTADA! ***");
 
-        String tipo_evento; // Variável para armazenar o TIPO (QUEDA/RETORNO)
-
         if (redeExternaAtiva)
         {
-            // A rede VOLTOU: Comuta para REDE EXTERNA
             Serial.println("A rede externa VOLTOU as: " + dataHoraAtual);
             tipo_evento = "RETORNO";
-
             delay(transicao_delay);
-
             tomada.setStatus(ATIVADO);
             B_18650.setStatus(DESATIVADA);
         }
         else
         {
-            // A rede CAIU: Comuta para BATERIA
             Serial.println("A rede externa CAIU as: " + dataHoraAtual);
             tipo_evento = "QUEDA";
-
             delay(transicao_delay);
-
             tomada.setStatus(DESATIVADO);
             B_18650.setStatus(ATIVADA);
         }
 
-        // --- SALVANDO O LOG NO SQLITE AQUI ---
-        // Monta o comando INSERT. Usamos String(porcentagem, 1) para formatar o float com 1 decimal.
-        String sql_insert = "INSERT INTO LOG_ENERGIA (DATA_HORA, TIPO, BATERIA_PERCENTUAL) VALUES ('" +
-                            dataHoraAtual + "', '" +
-                            tipo_evento + "', " +
-                            String(porcentagem, 1) + ");";
+        // --- SALVANDO O LOG USANDO A NOVA CLASSE ---
+        gerenciadorDeLogs.registrarEvento(dataHoraAtual, tipo_evento, porcentagem);
+        // -------------------------------------------
 
-        Serial.printf("Salvando evento no DB: %s - %.1f%%\n", tipo_evento.c_str(), porcentagem);
-        execSQL(sql_insert);
-        // -------------------------------------------------------
-
-        // ATUALIZAÇÃO DO ESPELHO (ESSENCIAL)
-        redeExternaEstavaAtiva = redeExternaAtiva;
+        redeExternaEstavaAtiva = redeExternaAtiva; // Atualiza o estado para a próxima verificação
         Serial.println("*\n");
     }
 
-    // Opcional: Manter o relógio interno atualizado a cada 60s (conforme config NTP)
     timeClient.update();
 
-    // --------------------------------------------------------------------------
-    // 3. IMPRESSÃO DOS DADOS (O Bloco de Apresentação)
-    // --------------------------------------------------------------------------
-
-    // Pega a hora atual para o log de monitoramento
+    // 3. IMPRESSÃO DOS DADOS DE MONITORAMENTO
     String dataHoraLog = obterDataHoraFormatada(timeClient);
-
     Serial.println("\n=========================================");
-    Serial.println("          MONITORAMENTO DE ENERGIA       ");
+    Serial.println("         MONITORAMENTO DE ENERGIA          ");
     Serial.println("DATA/HORA: " + dataHoraLog);
     Serial.println("=========================================");
-
-    // Imprime a fonte ativa no momento
-    if (redeExternaEstavaAtiva)
-    {
-        Serial.println(" > FONTE ATIVA: REDE EXTERNA <");
-    }
-    else
-    {
-        Serial.println(" > FONTE ATIVA: BATERIA <");
-    }
-
+    Serial.println(redeExternaEstavaAtiva ? " > FONTE ATIVA: REDE EXTERNA <" : " > FONTE ATIVA: BATERIA <");
     Serial.println("-----------------------------------------");
-
-    // DADOS DA REDE EXTERNA
     Serial.println("DADOS DA REDE EXTERNA:");
-    Serial.println(" -> Status (Comutador): " + statusTomada);
-    Serial.println(" -> Tensão Atual:      " + String(tensaoTomada, 1) + "V");
-
+    Serial.println(" -> Status (Comutador): " + statusTomadaToString(tomada.getStatus()));
+    Serial.println(" -> Tensão Atual:       " + String(tomada.getTensao(), 1) + "V");
     Serial.println("-----------------------------------------");
-
-    // DADOS DA BATERIA
     Serial.println("DADOS DA BATERIA (18650):");
-    Serial.println(" -> Status (Comutador): " + statusBateria);
-    Serial.println(" -> Tensão Atual:      " + String(tensaoBateria, 2) + "V");
-    Serial.println(" -> Porcentagem:       " + String(porcentagem, 1) + "%");
-
+    Serial.println(" -> Status (Comutador): " + statusBateriaToString(B_18650.getStatus()));
+    Serial.println(" -> Tensão Atual:       " + String(B_18650.getTensao(), 2) + "V");
+    Serial.println(" -> Porcentagem:        " + String(B_18650.getPorcentagem(), 1) + "%");
     Serial.println("=========================================\n");
 
-    delay(1000); // Espera 1 segundo antes da próxima atualização.
+    delay(1000);
 }
