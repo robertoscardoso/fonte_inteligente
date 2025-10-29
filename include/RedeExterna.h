@@ -1,7 +1,7 @@
 #ifndef REDE_EXTERNA_H
 #define REDE_EXTERNA_H
 
-#include "Arduino.h"
+#include <Arduino.h>
 #include "Energia.h"
 
 enum statusRedeExterna{

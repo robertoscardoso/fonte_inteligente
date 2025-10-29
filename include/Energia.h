@@ -1,6 +1,7 @@
 #ifndef ENERGIA_H
 #define ENERGIA_H
 
+#include <Arduino.h>
 #include "stdint.h"
 #include <Adafruit_ADS1X15.h>
 

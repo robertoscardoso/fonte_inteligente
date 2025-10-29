@@ -1,4 +1,4 @@
-#include "Arduino.h"
+#include <Arduino.h>
 #include "RedeExterna.h"
 
 RedeExterna::RedeExterna(uint8_t canal)

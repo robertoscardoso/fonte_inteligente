@@ -21,6 +21,9 @@ public:
 
     // Método para ler e imprimir todos os logs salvos no Serial Monitor
     void lerTodosOsLogs();
+    
+    // NOVO MÉTODO PARA O SERVIDOR WEB
+    String getLogsAsJson();
 
 private:
     sqlite3 *_db; // Ponteiro para o objeto do banco de dados
