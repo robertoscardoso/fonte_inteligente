@@ -1,7 +1,7 @@
 #ifndef BATERIA_H
 #define BATERIA_H
 
-#include "Arduino.h"
+#include <Arduino.h>
 #include "Energia.h"
 
 enum BateriaStatus

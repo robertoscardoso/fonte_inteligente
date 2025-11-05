@@ -1,5 +1,5 @@
 // INCLUDES DO PROJETO
-#include "Arduino.h"
+#include <Arduino.h>
 #include "Energia.h"
 #include "RedeExterna.h"
 #include "Bateria.h"
@@ -7,6 +7,7 @@
 #include "GerenciadorDeLogs.h"
 #include <NTPClient.h>
 #include <time.h>
+#include "WebServerManager.h"
 
 // INCLUI A NOSSA NOVA CLASSE
 #include "NotificadorTelegram.h"
@@ -17,6 +18,9 @@
 Bateria B_18650(3, 3.2, 0.0);
 RedeExterna tomada(2);
 WiFiManager rede_wifi;
+
+// Cria a instância do gerenciador do servidor web
+WebServerManager webServer(tomada, B_18650);
 
 // Define o caminho do banco de dados
 #define CAMINHO_DB "/littlefs/log_energia.db"
@@ -84,7 +88,15 @@ void setup()
     Serial.begin(115200);
     Serial.println("Sistema de Monitoramento de Energia Inicializado!");
 
-    rede_wifi.conectar("BORGES", "gomugomu");
+    // Tenta conectar e VERIFICA o resultado
+    if (rede_wifi.conectar("rede", "senha")) { 
+        // Se conectou com sucesso, inicia o servidor web
+        webServer.iniciar(); // <--- Adicione esta linha AQUI DENTRO DO IF
+    } else {
+        // Se falhou, avisa e NÃO inicia o servidor
+        Serial.println("Falha ao conectar ao WiFi. Servidor Web não iniciado.");
+        // (Opcional: Iniciar um Access Point aqui)
+    }
     
     // --- USA A NOSSA CLASSE PARA INICIALIZAR O TELEGRAM ---
     notificador.inicializar();

@@ -1,10 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
-    <title>Hello World POO - LittleFS</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Energia ESP32</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; }
+        .dashboard { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+        .card { background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; min-width: 220px; text-align: center; }
+        .card h2 { margin-top: 0; color: #555; font-size: 1.2em; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .value { font-size: 2.2em; font-weight: bold; margin: 10px 0; display: block; }
+        #status-rede.ATIVADA { color: #5cb85c; }
+        #status-rede.DESATIVADA { color: #d9534f; }
+        #gauge-bateria { width: 160px; height: 80px; margin: 10px auto; }
+        
+        .tabela-container { margin-top: 30px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 25px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #ddd; }
+        th { background-color: #f9f9f9; }
+        tbody tr:hover { background-color: #f5f5f5; }
+    </style>
 </head>
 <body>
-    <h1>Hello, World! (Carregado do LittleFS)</h1>
-    <p>Conexão Wi-Fi gerenciada pela classe WiFiManager.</p>
+    <h1>Dashboard Monitor de Energia</h1>
+
+    <div class="dashboard">
+        <div class="card">
+            <h2>Rede Externa</h2>
+            <span id="status-rede" class="value">--</span>
+        </div>
+        <div class="card">
+            <h2>Nível Bateria</h2>
+            <canvas id="gauge-bateria"></canvas> 
+            <div class="value">
+                <span id="perc-bateria">--</span> %
+            </div>
+        </div>
+    </div>
+
+    <div class="tabela-container">
+        <h2>Histórico de Eventos</h2>
+        <table id="tabela-historico">
+            <thead>
+                <tr>
+                    <th>Data/Hora</th>
+                    <th>Evento</th>
+                    <th>Nível Bateria</th>
+                </tr>
+            </thead>
+            <tbody id="corpo-tabela-historico">
+                </tbody>
+        </table>
+    </div>
+
+    <script src="gauge.min.js"></script> 
+    <script src="script.js"></script> 
 </body>
 </html>

@@ -1,5 +1,5 @@
+#include <Arduino.h>
 #include "Bateria.h"
-#include "Arduino.h"
 
 Bateria::Bateria(uint8_t canal, float voltagem_maxima, float voltagem_minima)
     : Energia(canal), MAX_VOLTAGEM(voltagem_maxima), MIN_VOLTAGEM(voltagem_minima)

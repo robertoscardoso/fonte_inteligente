@@ -1,5 +1,6 @@
 // NotificadorTelegram.cpp
 
+#include <Arduino.h>
 #include "NotificadorTelegram.h"
 
 // Implementação do Construtor

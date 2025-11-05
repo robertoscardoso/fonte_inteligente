@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "GerenciadorDeLogs.h"
 #include "LittleFS.h"
 
@@ -106,4 +107,49 @@ void GerenciadorDeLogs::executarSQL(const String &sql)
         Serial.printf("ERRO SQL (%d): %s\n", rc, zErrMsg);
         sqlite3_free(zErrMsg);
     }
+}
+
+// CALLBACK ESTÁTICO PARA CONSTRUIR O JSON
+// Este callback é chamado pelo sqlite3_exec para cada linha do resultado
+static int jsonCallback(void *data, int argc, char **argv, char **azColName) {
+    String *jsonString = static_cast<String*>(data); // Converte o ponteiro de volta para String*
+
+    // argv[0] = DATA_HORA, argv[1] = TIPO, argv[2] = BATERIA_PERCENTUAL
+    // (Baseado na query "SELECT DATA_HORA, TIPO, BATERIA_PERCENTUAL...")
+
+    if (jsonString->length() > 1) { // Adiciona vírgula se não for o primeiro item
+        *jsonString += ",";
+    }
+    
+    *jsonString += "{";
+    *jsonString += "\"data_hora\":\"" + String(argv[0] ? argv[0] : "") + "\",";
+    *jsonString += "\"tipo\":\"" + String(argv[1] ? argv[1] : "") + "\",";
+    *jsonString += "\"bateria_perc\":" + String(argv[2] ? argv[2] : "0.0");
+    *jsonString += "}";
+    
+    return 0; // Continua a consulta
+}
+
+// MÉTODO PÚBLICO 
+String GerenciadorDeLogs::getLogsAsJson() {
+    if (!_db) {
+        Serial.println("ERRO: DB não está aberto para ler logs JSON.");
+        return "[]"; // Retorna um array JSON vazio
+    }
+
+    String json = "["; // Inicia o array JSON
+    char *zErrMsg = 0;
+    // Limita aos 50 eventos mais recentes para não estourar a memória
+    const char *sql_select = "SELECT DATA_HORA, TIPO, BATERIA_PERCENTUAL FROM LOG_ENERGIA ORDER BY ID DESC LIMIT 50;"; 
+
+    // Usa o novo jsonCallback, passando o ponteiro da string 'json' como o (void*)data
+    int rc = sqlite3_exec(_db, sql_select, jsonCallback, &json, &zErrMsg);
+
+    if (rc != SQLITE_OK) {
+        Serial.printf("ERRO SQL (getLogsAsJson): %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    }
+
+    json += "]"; // Fecha o array JSON
+    return json;
 }
