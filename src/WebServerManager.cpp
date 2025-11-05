@@ -1,12 +1,14 @@
 #include "WebServerManager.h"
 #include <Arduino.h>
+#include "SaudeBateria.h" // Inclui a definição da classe SaudeBateria
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <ESPAsyncWebServer.h>
-#include "GerenciadorDeLogs.h" // 1. Inclui a definição da classe
+#include "GerenciadorDeLogs.h" // Inclui a definição da classe GerenciadorDeLogs
 
-// 2. Avisa ao compilador que esta variável global existe em outro arquivo
+// Avisa ao compilador que estas variáveis globais existem em outros arquivos
 extern GerenciadorDeLogs gerenciadorDeLogs;
+extern SaudeBateria saudeBateria; 
 
 // Construtor
 WebServerManager::WebServerManager(Energia &rede, Bateria &bat) : 
@@ -58,9 +60,16 @@ void WebServerManager::iniciar() {
         this->handleDados(request); 
     });
 
-    // NOVA ROTA para obter o HISTÓRICO "/historico"
+    // Rota para obter o HISTÓRICO "/historico"
     server.on("/historico", HTTP_GET, [this](AsyncWebServerRequest *request){
         this->handleHistorico(request);
+    });
+
+    // Rota para ZERAR OS CICLOS
+    server.on("/resetar-ciclos", HTTP_GET, [this](AsyncWebServerRequest *request){
+        saudeBateria.resetarCiclos(); // Chama a função da classe SaudeBateria
+        Serial.println("Contagem de ciclos zerada via web!");
+        request->send(200, "text/plain", "Contagem de ciclos zerada com sucesso!");
     });
 
     // Rota para páginas não encontradas (404)
@@ -88,19 +97,23 @@ void WebServerManager::handleDados(AsyncWebServerRequest *request) {
     bool redeAtiva = (tensaoRede > 1.0); 
     String statusRedeStr = redeAtiva ? "ATIVADA" : "DESATIVADA";
 
+    // Lê o contador de ciclos fracionário
+    float ciclos = saudeBateria.getCiclosCumulativos(); //
+
     String json = "{";
     json += "\"percBateria\":" + String(percBateria, 1) + ",";    
-    json += "\"statusRede\":\"" + statusRedeStr + "\""; 
+    json += "\"statusRede\":\"" + statusRedeStr + "\","; 
+    // Formata o float com 2 casas decimais
+    json += "\"ciclos\":" + String(ciclos, 2); 
     json += "}";
     
     request->send(200, "application/json", json); 
 }
 
-// NOVO HANDLER para "/historico" - Envia JSON do BANCO DE DADOS
+// HANDLER para "/historico" - Envia JSON do BANCO DE DADOS
 void WebServerManager::handleHistorico(AsyncWebServerRequest *request) {
-    // Busca o JSON da classe GerenciadorDeLogs (passada no main.cpp)
-    // Nota: Esta chamada pode ser lenta se o DB for grande.
-    String jsonHistorico = gerenciadorDeLogs.getLogsAsJson(); 
+    // Busca o JSON da classe GerenciadorDeLogs
+    String jsonHistorico = gerenciadorDeLogs.getLogsAsJson(); //
     request->send(200, "application/json", jsonHistorico);
 }
 

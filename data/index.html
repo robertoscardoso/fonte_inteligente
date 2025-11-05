@@ -20,6 +20,10 @@
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #ddd; }
         th { background-color: #f9f9f9; }
         tbody tr:hover { background-color: #f5f5f5; }
+
+        /* --- ADIÇÃO DE ESTILO PARA O BOTÃO DE RESET --- */
+        #btn-reset-ciclos { background-color: #d9534f; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        #btn-reset-ciclos:hover { background-color: #c9302c; }
     </style>
 </head>
 <body>
@@ -37,6 +41,13 @@
                 <span id="perc-bateria">--</span> %
             </div>
         </div>
+
+        <div class="card">
+            <h2>Ciclos Bateria</h2>
+            <span id="ciclos-bateria" class="value">--</span>
+            <button id="btn-reset-ciclos">Zerar Contagem</button>
+        </div>
+
     </div>
 
     <div class="tabela-container">

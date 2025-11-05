@@ -31,18 +31,23 @@ function buscarDados() {
             // Atualiza o Status da Rede (texto e cor)
             const statusRedeEl = document.getElementById('status-rede');
             statusRedeEl.textContent = data.statusRede;
-            statusRedeEl.className = "value " + data.statusRede; // Adiciona classe ATIVADA ou DESATIVADA
+            statusRedeEl.className = "value " + data.statusRede; 
 
             // Atualiza a Bateria (texto e medidor)
             document.getElementById('perc-bateria').textContent = data.percBateria.toFixed(1);
             if (gauge) {
                 gauge.set(data.percBateria); 
             }
+
+            // --- ADIÇÃO: ATUALIZA O CARD DE CICLOS ---
+            document.getElementById('ciclos-bateria').textContent = data.ciclos.toFixed(2); // Mostra com 2 decimais
+
         })
         .catch(error => {
             console.error('Erro ao buscar dados em tempo real:', error);
             document.getElementById('status-rede').textContent = 'Erro';
             document.getElementById('perc-bateria').textContent = '--';
+            document.getElementById('ciclos-bateria').textContent = '--'; // ADIÇÃO
             if (gauge) gauge.set(0);
         });
 }
@@ -53,9 +58,8 @@ function buscarHistorico() {
         .then(response => response.json())
         .then(data => {
             const corpoTabela = document.getElementById('corpo-tabela-historico');
-            corpoTabela.innerHTML = ""; // Limpa a tabela antes de preencher
+            corpoTabela.innerHTML = ""; 
 
-            // Loop para criar cada linha da tabela
             data.forEach(log => {
                 let linha = document.createElement('tr');
                 linha.innerHTML = `
@@ -81,4 +85,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Define o intervalo para atualizar os dados em tempo real
     setInterval(buscarDados, 5000); // Atualiza a cada 5 segundos
+
+    // --- LÓGICA DO BOTÃO DE RESET ---
+    document.getElementById('btn-reset-ciclos').addEventListener('click', function() {
+        if (confirm("Você tem certeza que quer zerar a contagem de ciclos?\nIsso deve ser feito apenas ao trocar a bateria.")) {
+            
+            fetch('/resetar-ciclos') // Chama a nova rota no ESP32
+                .then(response => response.text())
+                .then(message => {
+                    alert(message); // Mostra a mensagem de sucesso (ex: "Contagem zerada...")
+                    buscarDados(); // Atualiza os dados imediatamente para mostrar "0.00"
+                })
+                .catch(error => {
+                    console.error('Erro ao zerar ciclos:', error);
+                    alert('Erro ao tentar zerar os ciclos.');
+                });
+        }
+    });
 });

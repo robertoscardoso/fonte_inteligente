@@ -1,8 +1,10 @@
 // INCLUDES DO PROJETO
 #include <Arduino.h>
+#include <Preferences.h>
 #include "Energia.h"
 #include "RedeExterna.h"
 #include "Bateria.h"
+#include "SaudeBateria.h"
 #include "WiFiManager.h"
 #include "GerenciadorDeLogs.h"
 #include <NTPClient.h>
@@ -15,9 +17,10 @@
 // -------------------------------------------------------------
 // DECLARAÇÕES GLOBAIS
 // -------------------------------------------------------------
-Bateria B_18650(3, 3.2, 0.0);
+Bateria B_18650(3, 4.2, 3.1);
 RedeExterna tomada(2);
 WiFiManager rede_wifi;
+SaudeBateria saudeBateria;
 
 // Cria a instância do gerenciador do servidor web
 WebServerManager webServer(tomada, B_18650);
@@ -88,8 +91,9 @@ void setup()
     Serial.begin(115200);
     Serial.println("Sistema de Monitoramento de Energia Inicializado!");
 
+    saudeBateria.iniciar(); 
     // Tenta conectar e VERIFICA o resultado
-    if (rede_wifi.conectar("rede", "senha")) { 
+    if (rede_wifi.conectar("Rede", "Senha")) { 
         // Se conectou com sucesso, inicia o servidor web
         webServer.iniciar(); // <--- Adicione esta linha AQUI DENTRO DO IF
     } else {
@@ -134,6 +138,9 @@ void loop()
     float porcentagem = B_18650.getPorcentagem();
     float tensaoTomada = tomada.getTensao();
     bool redeExternaAtiva = (tensaoTomada > 1.0);
+
+    // --- ATUALIZA A LÓGICA DE CICLOS (NOVA CHAMADA) ---
+    saudeBateria.atualizar(porcentagem, redeExternaAtiva);
 
     if (redeExternaAtiva != redeExternaEstavaAtiva)
     {
