@@ -8,14 +8,24 @@
 #include <NTPClient.h>
 #include <time.h>
 #include "WebServerManager.h"
+#include "GerenciadorDePotencia.h"
 
 // INCLUI A NOSSA NOVA CLASSE
 #include "NotificadorTelegram.h"
 
+// --- CONTROLE DE FUNCIONALIDADES ---
+// Comente a linha abaixo para DESATIVAR o modo de economia de energia
+#define HABILITAR_MODO_ECONOMIA
+// Defina a tensão de corte (em Volts) para ativar a economia
+const float TENSAO_DE_CORTE = 3.4; 
+// ----------------------------------------
+
 // -------------------------------------------------------------
 // DECLARAÇÕES GLOBAIS
 // -------------------------------------------------------------
-Bateria B_18650(3, 3.2, 0.0);
+
+Bateria B_18650(3, 4.2, 3.1); 
+
 RedeExterna tomada(2);
 WiFiManager rede_wifi;
 
@@ -31,12 +41,12 @@ bool redeExternaEstavaAtiva = false;
 int transicao_delay = 3000;
 
 // --- CONFIGURAÇÕES DO TELEGRAM ---
-// Substitua pelos seus dados obtidos com o Botfather e IDBot
 #define BOT_TOKEN "8033617155:AAGaXf8IOH_CRTGgP2V5nQIQ35GscalG0cY"
 #define CHAT_ID "1561936580"
-
 // Cria uma instância global da nossa nova classe
 NotificadorTelegram notificador(BOT_TOKEN, CHAT_ID);
+
+GerenciadorDePotencia gerenciadorPotencia;
 // ---------------------------------
 
 // -----------------------------------------------------------------------------
@@ -63,14 +73,15 @@ String statusBateriaToString(BateriaStatus status)
 }
 
 // -----------------------------------------------------------------------------
-// 2. CONFIGURAÇÕES E FUNÇÕES NTP (mantidas como estão)
+// 2. CONFIGURAÇÕES E FUNÇÕES NTP (COM 'static')
 // -----------------------------------------------------------------------------
 WiFiUDP ntpUDP;
 const long utcOffsetInSeconds = -10800;
 const char *ntpServer = "a.st1.ntp.br";
 NTPClient timeClient(ntpUDP, ntpServer, utcOffsetInSeconds, 60000);
 
-String obterDataHoraFormatada(NTPClient &client)
+// --- ADICIONADO 'static' para evitar erro de "multiple definition" ---
+static String obterDataHoraFormatada(NTPClient &client)
 {
     time_t epochTime = client.getEpochTime();
     struct tm *timeInfo = localtime(&epochTime);
@@ -89,13 +100,12 @@ void setup()
     Serial.println("Sistema de Monitoramento de Energia Inicializado!");
 
     // Tenta conectar e VERIFICA o resultado
-    if (rede_wifi.conectar("rede", "senha")) { 
+    if (rede_wifi.conectar("Rede", "Senha")) { 
         // Se conectou com sucesso, inicia o servidor web
-        webServer.iniciar(); // <--- Adicione esta linha AQUI DENTRO DO IF
+        webServer.iniciar(); 
     } else {
         // Se falhou, avisa e NÃO inicia o servidor
         Serial.println("Falha ao conectar ao WiFi. Servidor Web não iniciado.");
-        // (Opcional: Iniciar um Access Point aqui)
     }
     
     // --- USA A NOSSA CLASSE PARA INICIALIZAR O TELEGRAM ---
@@ -131,9 +141,27 @@ void setup()
 // -----------------------------------------------------------------------------
 void loop()
 {
+    float tensaoBateria = B_18650.getTensao();
     float porcentagem = B_18650.getPorcentagem();
     float tensaoTomada = tomada.getTensao();
     bool redeExternaAtiva = (tensaoTomada > 1.0);
+
+    //VERIFICAÇÃO DO MODO DE ECONOMIA DE ENERGIA ---
+    #ifdef HABILITAR_MODO_ECONOMIA
+
+    gerenciadorPotencia.verificarEAtivarEconomia(
+        tensaoBateria,
+        TENSAO_DE_CORTE,
+        redeExternaAtiva,
+        porcentagem,
+        gerenciadorDeLogs, // Passa o objeto de logs
+        timeClient         // Passa o objeto de tempo
+    );
+    
+    #endif
+    // --- FIM DA VERIFICAÇÃO ---
+    
+
 
     if (redeExternaAtiva != redeExternaEstavaAtiva)
     {
