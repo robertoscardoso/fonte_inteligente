@@ -46,7 +46,7 @@ bool GerenciadorDeLogs::iniciar()
         "TIPO TEXT NOT NULL,"
         "BATERIA_PERCENTUAL REAL NOT NULL);";
 
-    executarSQL(String(sql_criar_tabela));
+    executarSQL(String(sql_criar_tabela)); // Usa o executor padrão
 
     return true;
 }
@@ -60,10 +60,10 @@ void GerenciadorDeLogs::registrarEvento(const String &dataHora, const String &ti
                       String(percentualBateria, 1) + ");";
 
     Serial.printf("Salvando evento no DB: %s - %.1f%%\n", tipo.c_str(), percentualBateria);
-    executarSQL(sql_insert);
+    executarSQL(sql_insert); // Usa o executor padrão
 }
 
-// Método para ler e imprimir todos os logs
+// Método para ler e imprimir todos os logs (MODIFICADO)
 void GerenciadorDeLogs::lerTodosOsLogs()
 {
     if (!_db)
@@ -76,31 +76,43 @@ void GerenciadorDeLogs::lerTodosOsLogs()
     Serial.println(" HISTÓRICO DE EVENTOS SALVOS (SQLite) ");
     Serial.println("-----------------------------------------");
 
-    const char *sql_select = "SELECT DATA_HORA, TIPO, BATERIA_PERCENTUAL FROM LOG_ENERGIA ORDER BY ID DESC;";
-    executarSQL(String(sql_select));
+    // (MODIFICADO) A query agora seleciona o ID também
+    const char *sql_select = "SELECT ID, DATA_HORA, TIPO, BATERIA_PERCENTUAL FROM LOG_ENERGIA ORDER BY ID DESC;";
+    
+    // (MODIFICADO) Chama sqlite3_exec diretamente para usar o callback de serial
+    char *zErrMsg = 0;
+    int rc = sqlite3_exec(_db, sql_select, callback, (void *)"Resultados", &zErrMsg);
+    if (rc != SQLITE_OK)
+    {
+        Serial.printf("ERRO SQL (lerTodosOsLogs): %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    }
 
     Serial.println("-----------------------------------------\n");
 }
 
-// Implementação da função de callback
+// Implementação da função de callback (para print no Serial) (MODIFICADO)
 int GerenciadorDeLogs::callback(void *data, int argc, char **argv, char **azColName)
 {
+    // Agora o argv[0] é o ID
     Serial.printf("| ");
     for (int i = 0; i < argc; i++)
     {
+        // Imprime "NOME_COLUNA: valor"
         Serial.printf("%s: %s | ", azColName[i], argv[i] ? argv[i] : "NULL");
     }
     Serial.println();
     return 0;
 }
 
-// Implementação do executor de SQL
+// Implementação do executor de SQL (usado apenas para INSERT/CREATE)
 void GerenciadorDeLogs::executarSQL(const String &sql)
 {
     char *zErrMsg = 0;
     const char *sql_c = sql.c_str();
 
-    int rc = sqlite3_exec(_db, sql_c, callback, (void *)"Resultados", &zErrMsg);
+    // Executa sem callback, pois é para INSERT/CREATE
+    int rc = sqlite3_exec(_db, sql_c, 0, 0, &zErrMsg);
 
     if (rc != SQLITE_OK)
     {
@@ -109,40 +121,50 @@ void GerenciadorDeLogs::executarSQL(const String &sql)
     }
 }
 
-// CALLBACK ESTÁTICO PARA CONSTRUIR O JSON
+// ------------------------------------------------------------------
+// MÉTODOS PARA O SERVIDOR WEB
+// ------------------------------------------------------------------
+
+// (MODIFICADO) CALLBACK ESTÁTICO PARA CONSTRUIR O JSON
 // Este callback é chamado pelo sqlite3_exec para cada linha do resultado
 static int jsonCallback(void *data, int argc, char **argv, char **azColName) {
-    String *jsonString = static_cast<String*>(data); // Converte o ponteiro de volta para String*
-
-    // argv[0] = DATA_HORA, argv[1] = TIPO, argv[2] = BATERIA_PERCENTUAL
-    // (Baseado na query "SELECT DATA_HORA, TIPO, BATERIA_PERCENTUAL...")
+    String *jsonString = static_cast<String*>(data); 
+    
+    // A query agora DEVE fornecer 4 colunas:
+    // argv[0] = ID
+    // argv[1] = DATA_HORA
+    // argv[2] = TIPO
+    // argv[3] = BATERIA_PERCENTUAL
 
     if (jsonString->length() > 1) { // Adiciona vírgula se não for o primeiro item
         *jsonString += ",";
     }
     
     *jsonString += "{";
-    *jsonString += "\"data_hora\":\"" + String(argv[0] ? argv[0] : "") + "\",";
-    *jsonString += "\"tipo\":\"" + String(argv[1] ? argv[1] : "") + "\",";
-    *jsonString += "\"bateria_perc\":" + String(argv[2] ? argv[2] : "0.0");
+    // (MUDANÇA CRÍTICA) Adiciona o ID ao JSON
+    *jsonString += "\"id\":" + String(argv[0] ? argv[0] : "0") + ","; 
+    *jsonString += "\"data_hora\":\"" + String(argv[1] ? argv[1] : "") + "\",";
+    *jsonString += "\"tipo\":\"" + String(argv[2] ? argv[2] : "") + "\",";
+    *jsonString += "\"bateria_perc\":" + String(argv[3] ? argv[3] : "0.0");
     *jsonString += "}";
     
     return 0; // Continua a consulta
 }
 
-// MÉTODO PÚBLICO 
+// (MODIFICADO) MÉTODO PÚBLICO (Para Carga Inicial)
 String GerenciadorDeLogs::getLogsAsJson() {
     if (!_db) {
-        Serial.println("ERRO: DB não está aberto para ler logs JSON.");
+        Serial.println("ERRO: DB não está aberto para ler logs JSON (carga inicial).");
         return "[]"; // Retorna um array JSON vazio
     }
 
     String json = "["; // Inicia o array JSON
     char *zErrMsg = 0;
-    // Limita aos 50 eventos mais recentes para não estourar a memória
-    const char *sql_select = "SELECT DATA_HORA, TIPO, BATERIA_PERCENTUAL FROM LOG_ENERGIA ORDER BY ID DESC LIMIT 50;"; 
+    
+    // (MUDANÇA CRÍTICA) A query SQL agora seleciona o ID
+    const char *sql_select = "SELECT ID, DATA_HORA, TIPO, BATERIA_PERCENTUAL FROM LOG_ENERGIA ORDER BY ID DESC LIMIT 50;"; 
 
-    // Usa o novo jsonCallback, passando o ponteiro da string 'json' como o (void*)data
+    // Usa o jsonCallback (que agora espera o ID), passando o ponteiro da string 'json'
     int rc = sqlite3_exec(_db, sql_select, jsonCallback, &json, &zErrMsg);
 
     if (rc != SQLITE_OK) {
@@ -151,5 +173,34 @@ String GerenciadorDeLogs::getLogsAsJson() {
     }
 
     json += "]"; // Fecha o array JSON
+    return json;
+}
+
+
+// (NOVO) MÉTODO PÚBLICO (Para Atualizações / Polling)
+String GerenciadorDeLogs::getNewLogsAsJson(int ultimoID) {
+    if (!_db) {
+        Serial.println("ERRO: DB não está aberto para ler logs JSON (novos).");
+        return "[]";
+    }
+
+    String json = "[";
+    char *zErrMsg = 0;
+    
+    // Esta query busca APENAS logs mais novos que o 'ultimoID'
+    // E retorna em ordem ASC (ascendente) para o JavaScript adicionar na ordem correta
+    String sql_select_str = "SELECT ID, DATA_HORA, TIPO, BATERIA_PERCENTUAL FROM LOG_ENERGIA WHERE ID > " + 
+                            String(ultimoID) + 
+                            " ORDER BY ID ASC;"; 
+
+    // Usa o *mesmo* jsonCallback, pois a query tem as mesmas 4 colunas
+    int rc = sqlite3_exec(_db, sql_select_str.c_str(), jsonCallback, &json, &zErrMsg);
+
+    if (rc != SQLITE_OK) {
+        Serial.printf("ERRO SQL (getNewLogsAsJson): %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    }
+
+    json += "]";
     return json;
 }

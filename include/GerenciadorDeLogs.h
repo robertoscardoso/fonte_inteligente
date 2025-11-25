@@ -24,6 +24,7 @@ public:
     
     // NOVO MÉTODO PARA O SERVIDOR WEB
     String getLogsAsJson();
+    String getNewLogsAsJson(int ultimoID);
 
 private:
     sqlite3 *_db; // Ponteiro para o objeto do banco de dados
