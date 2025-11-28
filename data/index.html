@@ -355,7 +355,7 @@
                 id="redeAtiva">--</div>
 
             <div
-                style="width: 100%; margin-top: 30px; display: flex; flex-direction: column; align-items: center; /* REMOVIDO: flex-grow: 1; */">
+                style="width: 100%; margin-top: 30px; display: flex; flex-direction: column; align-items: center;">
                 <div class="data-item">
                     <span class="data-label">Tensão da Rede:</span>
                     <span class="data-value" id="tensaoRedeValue">-- V</span>
@@ -382,9 +382,29 @@
             </div>
 
             <div class="data-item"
-                style="border: none; margin-top: 20px; width: 90%; /* REMOVIDO: flex-grow: 1; align-items: flex-end; */">
+                style="border: none; margin-top: 20px; width: 90%;">
                 <span class="data-label">Estado:</span>
                 <span class="data-value" style="color: green;" id="estado"">--</span>
+            </div>
+        </div>
+
+        <div class="cards">
+            <h2 class="titulo">Configurações</h2>
+            
+            <div class="data-item">
+                <span class="data-label">ID do Dispositivo:</span>
+                <span class="data-value" id="displayId" style="font-size: 0.8em;">--</span>
+            </div>
+
+            <div style="width: 100%; margin-top: 20px; text-align: center;">
+                <label class="data-label" for="inputApelido">Apelido da Fonte:</label>
+                <input type="text" id="inputApelido" placeholder="Carregando..." 
+                       style="width: 90%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; text-align: center;">
+                
+                <button onclick="salvarApelido()" 
+                        style="background-color: rgb(26, 26, 180); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    Salvar Nome
+                </button>
             </div>
         </div>
 
@@ -399,10 +419,8 @@
                                     <th>Bateria (%)</th>
                                 </tr>
                             </thead>
-                            <!-- (MODIFICADO) ID adicionado e conteúdo estático removido -->
                             <tbody id="log-table-body">
                                 <tr>
-                                    <!-- Placeholder inicial -->
                                     <td colspan="3" style="text-align: center; color: #888;">Carregando logs...</td>
                                 </tr>
                             </tbody>
@@ -430,15 +448,10 @@
             </div>
         </div>
 
-        <!-- =================================================================== -->
-        <!-- (MODIFICADO) JAVASCRIPT ATUALIZADO COM LÓGICA DE POLLING -->
-        <!-- =================================================================== -->
         <script>
-            // --- (NOVO) Variáveis globais para o polling do histórico ---
             let ultimoLogID = 0;
-            let isFirstLogLoad = true; // Controla a msg "Carregando..."
+            let isFirstLogLoad = true; 
 
-            // --- Lógica do Modal (existente) ---
             var modal = document.getElementById('wifiModal');
             window.onclick = function (event) {
                 if (event.target == modal) {
@@ -446,7 +459,6 @@
                 }
             }
 
-            // --- Função para dados em tempo real (existente) ---
             function fetchData() {
                 fetch('/data')
                     .then(response => {
@@ -456,30 +468,35 @@
                         return response.json();
                     })
                     .then(data => {
-                        // console.log("Dados recebidos: ", data); // Descomente para depurar
 
                         document.getElementById('tensaoRedeValue').textContent = data.tensaoRede.toFixed(1) + "V";
-                        document.getElementById('tensaoBateria').textContent = data.tensaoBateria.toFixed(2) + "V"; // (Ajustado para 2 casas)
+                        document.getElementById('tensaoBateria').textContent = data.tensaoBateria.toFixed(2) + "V"; 
                         document.getElementById("porcentagemBateria").textContent = data.porcentagemBateria.toFixed(0) + "%";
+                        document.getElementById('displayId').textContent = data.id || "Gerando...";
+                        
+                        const inputApelido = document.getElementById('inputApelido');
+                        if (document.activeElement !== inputApelido) {
+                            inputApelido.value = data.apelido || "";
+                        }
+                        
+                        document.querySelector('.navbar h1').textContent = data.apelido || "Fonte Inteligente";
 
                         const redeAtivaEl = document.getElementById("redeAtiva");
                         redeAtivaEl.textContent = data.redeAtiva;
-                        // (NOVO) Muda a cor da fonte ativa
                         if (data.redeAtiva === "REDE EXTERNA") {
-                            redeAtivaEl.style.color = 'rgb(26, 26, 180)'; // Azul
+                            redeAtivaEl.style.color = 'rgb(26, 26, 180)'; 
                         } else {
-                            redeAtivaEl.style.color = 'rgb(243, 190, 16)'; // Amarelo
+                            redeAtivaEl.style.color = 'rgb(243, 190, 16)'; 
                         }
 
                         const estadoEl = document.getElementById("estado");
                         estadoEl.textContent = data.estado;
-                        // (NOVO) Muda a cor do estado
                         if (data.estado === "Carregando") {
                             estadoEl.style.color = 'green';
                         } else if (data.estado === "Descarregando") {
                             estadoEl.style.color = 'orange';
                         } else {
-                            estadoEl.style.color = 'blue'; // Carga Completa
+                            estadoEl.style.color = 'blue'; 
                         }
                     })
                     .catch(error => {
@@ -489,31 +506,40 @@
                     });
             }
 
-            // --- (NOVO) Função para criar linha da tabela de log ---
+            function salvarApelido() {
+                const novoApelido = document.getElementById('inputApelido').value;
+                if(!novoApelido) return alert("Digite um nome válido!");
+
+                fetch('/salvar-apelido', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'apelido=' + encodeURIComponent(novoApelido)
+                })
+                .then(response => response.text())
+                .then(msg => {
+                    alert(msg);
+                    fetchData(); 
+                })
+                .catch(err => alert("Erro ao salvar: " + err));
+            }
+
             function createLogRow(log) {
                 const row = document.createElement('tr');
 
-                // Define o estilo com base no tipo de evento
-                let tipoEstilo = 'color: #333;'; // Padrão
+                let tipoEstilo = 'color: #333;'; 
                 if (log.tipo === 'QUEDA') {
                     tipoEstilo = 'color: red; font-weight: bold;';
                 } else if (log.tipo === 'RETORNO') {
                     tipoEstilo = 'color: green; font-weight: bold;';
                 }
 
-                // (IMPORTANTE) A ordem das colunas DEVE bater com seu HTML:
-                // 1. Tipo, 2. Data/Hora, 3. Bateria (%)
-
-                // Coluna 1: Tipo
                 const cellTipo = document.createElement('td');
                 cellTipo.textContent = log.tipo;
                 cellTipo.style.cssText = tipoEstilo;
 
-                // Coluna 2: Data/Hora
                 const cellData = document.createElement('td');
                 cellData.textContent = log.data_hora;
 
-                // Coluna 3: Bateria
                 const cellBateria = document.createElement('td');
                 cellBateria.textContent = log.bateria_perc.toFixed(1) + "%";
 
@@ -528,13 +554,12 @@
                 const tableBody = document.getElementById('log-table-body');
 
                 try {
-                    // (IMPORTANTE) Usando a rota /historico
                     const response = await fetch('/historico');
                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
                     const logs = await response.json();
 
-                    tableBody.innerHTML = ''; // Limpa o "Carregando..."
+                    tableBody.innerHTML = ''; 
                     isFirstLogLoad = false;
 
                     if (logs.length === 0) {
@@ -544,10 +569,9 @@
                     ultimoLogID = logs[0].id;
                     console.log("Log mais recente ID:", ultimoLogID);
 
-                    // Preenche a tabela
                     logs.forEach(log => {
                         const row = createLogRow(log);
-                        tableBody.appendChild(row); // Adiciona no final (ordem DESC)
+                        tableBody.appendChild(row); 
                     });
 
                 } catch (error) {
@@ -556,10 +580,8 @@
                 }
             }
 
-            // --- (NOVO) Função para buscar *NOVOS* logs (Polling) ---
             async function fetchNewLogs() {
                 if (isFirstLogLoad) {
-                    // Não busca novos logs até que os iniciais tenham sido carregados
                     return;
                 }
 
@@ -567,31 +589,25 @@
                 const tableBody = document.getElementById('log-table-body');
 
                 try {
-                    // (IMPORTANTE) Chama a nova rota de API
                     const response = await fetch(`/historico/new?sinceID=${ultimoLogID}`);
                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
                     const newLogs = await response.json();
 
                     if (newLogs.length === 0) {
-                        // Isso é o normal. Nenhum log novo.
                         return;
                     }
 
                     console.log(`Recebidos ${newLogs.length} novos logs.`);
 
-                    // Remove a mensagem "Nenhum log encontrado" se ela existir
                     const noLogMessage = tableBody.querySelector('td[colspan="3"]');
                     if (noLogMessage) noLogMessage.parentElement.remove();
 
-                    // Adiciona os novos logs no TOPO da tabela
                     newLogs.forEach(log => {
                         const row = createLogRow(log);
-                        tableBody.prepend(row); // .prepend() adiciona no início
+                        tableBody.prepend(row); 
                     });
 
-                    // (IMPORTANTE) Atualiza o ultimoLogID com o ID mais recente
-                    // Como a query é ASC, o mais recente é o último
                     ultimoLogID = newLogs[newLogs.length - 1].id;
                     console.log("Novo log mais recente ID:", ultimoLogID);
 
@@ -607,7 +623,6 @@
                 const password = document.getElementById("password").value;
                 const statusCard = document.getElementById("statusCard");
 
-                // Mostra o card "Tentando conectar..."
                 statusCard.style.display = "block";
                 statusCard.className = "status-card status-connecting";
                 statusCard.textContent = "Tentando conectar...";
@@ -640,14 +655,12 @@
 
             document.getElementById("wifiForm").addEventListener("submit", enviarCredenciaisWiFi);
 
-            // --- (MODIFICADO) Inicialização ---
             window.onload = function () {
-                // Inicia a busca de dados em tempo real
                 fetchData();
                 setInterval(fetchData, 1000);
 
-                fetchInitialLogs(); // Busca a carga inicial
-                setInterval(fetchNewLogs, 10000); // Verifica por novos logs a cada 5s
+                fetchInitialLogs(); 
+                setInterval(fetchNewLogs, 10000); 
             }
 
         </script>

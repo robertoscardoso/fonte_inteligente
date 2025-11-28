@@ -1,4 +1,3 @@
-// INCLUDES DO PROJETO
 #include <Arduino.h>
 #include "Energia.h"
 #include "RedeExterna.h"
@@ -9,11 +8,7 @@
 #include <Wire.h>
 #include <FS.h>
 #include <LittleFS.h>
-#include "ServidorWeb.h"   // <<< NOVA CLASSE DO WEBSERVER
-
-// -------------------------------------------------------------
-// DECLARAÇÕES GLOBAIS
-// -------------------------------------------------------------
+#include "ServidorWeb.h"
 
 #define CAMINHO_DB "/littlefs/log_energia.db"
 
@@ -31,11 +26,9 @@ Bateria B_18650(0, 3.1, 0);
 RedeExterna tomada(2);
 GerenciadorDeLogs gerenciadorDeLogs(CAMINHO_DB);
 ServidorWeb servidor(80,&gerenciadorDeLogs,&B_18650,&tomada);
-// -----------------------------------------------------------------------------
-// CONFIGURAÇÃO DO NTP 
-// -----------------------------------------------------------------------------
+
 WiFiUDP ntpUDP;
-const long utcOffsetInSeconds = -10800;  // -3h do Brasil
+const long utcOffsetInSeconds = -10800;
 const char *ntpServer = "time.google.com";
 NTPClient timeClient(ntpUDP, ntpServer, utcOffsetInSeconds, 60000);
 
@@ -48,63 +41,52 @@ String obterDataHoraFormatada(NTPClient &client)
     return String(buffer);
 }
 
-
-
-
-// -----------------------------------------------------------------------------
-// SETUP
-// -----------------------------------------------------------------------------
 void setup()
 {
     Serial.begin(115200);
-    Serial.println("\nSistema de Monitoramento de Energia Inicializado!");
+    Serial.println("\nSistema Iniciado");
 
-    // Inicializa LittleFS
     if (!LittleFS.begin())
     {
-        Serial.println("Erro ao montar LittleFS!");
+        Serial.println("Erro LittleFS");
         while (1);
     }
 
-    // Inicializa rede + webserver
     servidor.iniciar(ssid, password, hostname);
 
-    // Inicializa os componentes
     Energia::inicializar();
     pinMode(pinoBuckBooster, OUTPUT);
     digitalWrite(pinoBuckBooster, LOW);
 
-    // Inicializa NTP
     timeClient.begin();
     timeClient.update();
 
-    // Inicializa o banco/logs
     if (!gerenciadorDeLogs.iniciar())
     {
-        Serial.println("Falha crítica ao inicializar o Gerenciador de Logs. Sistema parado.");
+        Serial.println("Erro Logs");
         while (1);
     }
 }
 
-// -----------------------------------------------------------------------------
-// LOOP PRINCIPAL
-// -----------------------------------------------------------------------------
 void loop()
 {
-    // Atualiza o WebServer (rotas, JSON, histórico etc.)
     servidor.atualizar();
 
-    // Atualiza medições
     float porcentagem = B_18650.getPorcentagem();
     float tensaoTomada = tomada.getTensao();
     bool redeExternaAtiva = (tensaoTomada > 0.5);
 
-    // Verifica mudanças de estado (queda/retorno)
     if (millis() - lastUpdateTime >= updateInterval)
     {
+        timeClient.update();
+
+        // 1704067200 = 01/01/2024. Garante que so cria o ID se a data for valida e atual
+        if (timeClient.getEpochTime() > 1704067200) {
+            servidor.verificarConfiguracao(obterDataHoraFormatada(timeClient));
+        }
+
         if (redeExternaAtiva != redeExternaEstavaAtiva)
         {
-            timeClient.update();
             String dataHoraAtual = obterDataHoraFormatada(timeClient);
             String tipo_evento;
 
@@ -124,9 +106,8 @@ void loop()
             gerenciadorDeLogs.registrarEvento(dataHoraAtual, tipo_evento, porcentagem);
 
             redeExternaEstavaAtiva = redeExternaAtiva;
-            lastUpdateTime = millis();
         }
-
-        timeClient.update();
+        
+        lastUpdateTime = millis();
     }
 }

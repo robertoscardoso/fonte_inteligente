@@ -24,12 +24,20 @@ private:
     bool redeAtiva;
     bool redeAtivaAnterior;
 
+    String idDispositivo;
+    String apelido;
+
     // Handlers (callbacks)
     void handleRoot();
     void handleData();
     void handleHistorico();
     void handleHistoricoNew();
     void handleConnect();
+    
+    // Configurações
+    void handleSalvarApelido();
+    void handleResetConfig(); // <--- FALTAVA ISSO AQUI
+    void salvarConfigNoArquivo();
 
 public:
     ServidorWeb(
@@ -40,7 +48,9 @@ public:
     );
 
     void iniciar(const char *ssidAP, const char *senhaAP, const char *hostname);
-    void atualizar(); // chamado no loop()
+    void atualizar(); 
+    
+    void verificarConfiguracao(String dataHoraAtual);
 };
 
 #endif
