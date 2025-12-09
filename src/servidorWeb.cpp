@@ -49,7 +49,7 @@ void ServidorWeb::verificarConfiguracao(String dataHoraAtual, long EpochTime)
     }
     idInvalido = (idDispositivo == "");
 
-    if (idInvalido && EpochTime>1704067200)
+    if (idInvalido && EpochTime > 1704067200)
     {
         String idGerado = dataHoraAtual;
         idGerado.replace("/", "");
@@ -95,6 +95,25 @@ void ServidorWeb::iniciar(const char *ssidAP, const char *senhaAP, const char *h
     if (!MDNS.begin(hostname))
     {
         Serial.println("Erro mDNS");
+    }
+
+    if (LittleFS.exists("/config.json"))
+    {
+        File file = LittleFS.open("/config.json", "r");
+        if (file)
+        {
+            JsonDocument doc;
+            DeserializationError error = deserializeJson(doc, file);
+            if (!error)
+            {
+                // CORREÇÃO DOS AVISOS DO ARDUINOJSON
+                if (doc["id"].is<String>())
+                    idDispositivo = doc["id"].as<String>();
+                if (doc["apelido"].is<String>())
+                    apelido = doc["apelido"].as<String>();
+            }
+            file.close();
+        }
     }
 
     server.on("/", std::bind(&ServidorWeb::handleRoot, this));

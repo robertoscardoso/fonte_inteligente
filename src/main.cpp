@@ -16,11 +16,10 @@ const char *hostname = "fonteinteligente";
 const char *ssid = "FONTE-BACKUP";
 const char *password = "";
 const long updateInterval = 1000;
-
 const int pinoBuckBooster = 0;
-
 unsigned long lastUpdateTime = 0;
 bool redeExternaEstavaAtiva = false;
+bool verificado = false;
 
 Bateria B_18650(1, 4.0, 3.1);
 RedeExterna tomada(3);
@@ -54,11 +53,10 @@ void setup()
     }
 
     servidor.iniciar(ssid, password, hostname);
-
+    servidor.enviarConfiguracaoParaServidor();
     Energia::inicializar();
     pinMode(pinoBuckBooster, OUTPUT);
     digitalWrite(pinoBuckBooster, LOW);
-
     timeClient.begin();
     timeClient.update();
 
@@ -76,31 +74,27 @@ void loop()
 
     float porcentagem = B_18650.getPorcentagem();
     float tensaoTomada = tomada.getTensao();
-    float valorBrutoTomada = tomada.getValorBruto();
     bool redeExternaAtiva = (tensaoTomada > 4.0);
-    bool verificado = false;
     long epochTime = timeClient.getEpochTime();
-    Serial.println("VALOR TENSÃO");
-    Serial.println(tensaoTomada);
-    Serial.println("VALOR BRUTO");
-    Serial.println(valorBrutoTomada);
     if (millis() - lastUpdateTime >= updateInterval)
     {
         timeClient.update();
 
-        if(porcentagem>0 || redeExternaAtiva){
+        if (porcentagem > 0 || redeExternaAtiva)
+        {
             digitalWrite(pinoBuckBooster, LOW);
-        }else{
-           digitalWrite(pinoBuckBooster, HIGH); 
+        }
+        else
+        {
+            digitalWrite(pinoBuckBooster, HIGH);
+            delay(10000);
         }
 
-        if ((epochTime>1704067200) && !verificado)
+        if ((epochTime > 1704067200) && !verificado)
         {
             servidor.verificarConfiguracao(obterDataHoraFormatada(timeClient), epochTime);
-            servidor.enviarConfiguracaoParaServidor();
             verificado = !verificado;
         }
-
 
         if (redeExternaAtiva != redeExternaEstavaAtiva)
         {
