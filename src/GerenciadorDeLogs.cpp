@@ -130,25 +130,18 @@ void GerenciadorDeLogs::executarSQL(const String &sql)
 static int jsonCallback(void *data, int argc, char **argv, char **azColName) {
     String *jsonString = static_cast<String*>(data); 
     
-    // A query agora DEVE fornecer 4 colunas:
-    // argv[0] = ID
-    // argv[1] = DATA_HORA
-    // argv[2] = TIPO
-    // argv[3] = BATERIA_PERCENTUAL
-
     if (jsonString->length() > 1) { // Adiciona vírgula se não for o primeiro item
         *jsonString += ",";
     }
     
     *jsonString += "{";
-    // (MUDANÇA CRÍTICA) Adiciona o ID ao JSON
     *jsonString += "\"id\":" + String(argv[0] ? argv[0] : "0") + ","; 
     *jsonString += "\"data_hora\":\"" + String(argv[1] ? argv[1] : "") + "\",";
     *jsonString += "\"tipo\":\"" + String(argv[2] ? argv[2] : "") + "\",";
     *jsonString += "\"bateria_perc\":" + String(argv[3] ? argv[3] : "0.0");
     *jsonString += "}";
     
-    return 0; // Continua a consulta
+    return 0;
 }
 
 // (MODIFICADO) MÉTODO PÚBLICO (Para Carga Inicial)
@@ -177,7 +170,6 @@ String GerenciadorDeLogs::getLogsAsJson() {
 }
 
 
-// (NOVO) MÉTODO PÚBLICO (Para Atualizações / Polling)
 String GerenciadorDeLogs::getNewLogsAsJson(int ultimoID) {
     if (!_db) {
         Serial.println("ERRO: DB não está aberto para ler logs JSON (novos).");
@@ -187,13 +179,10 @@ String GerenciadorDeLogs::getNewLogsAsJson(int ultimoID) {
     String json = "[";
     char *zErrMsg = 0;
     
-    // Esta query busca APENAS logs mais novos que o 'ultimoID'
-    // E retorna em ordem ASC (ascendente) para o JavaScript adicionar na ordem correta
     String sql_select_str = "SELECT ID, DATA_HORA, TIPO, BATERIA_PERCENTUAL FROM LOG_ENERGIA WHERE ID > " + 
                             String(ultimoID) + 
                             " ORDER BY ID ASC;"; 
 
-    // Usa o *mesmo* jsonCallback, pois a query tem as mesmas 4 colunas
     int rc = sqlite3_exec(_db, sql_select_str.c_str(), jsonCallback, &json, &zErrMsg);
 
     if (rc != SQLITE_OK) {

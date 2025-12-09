@@ -22,7 +22,6 @@ public:
     // Método para ler e imprimir todos os logs salvos no Serial Monitor
     void lerTodosOsLogs();
     
-    // NOVO MÉTODO PARA O SERVIDOR WEB
     String getLogsAsJson();
     String getNewLogsAsJson(int ultimoID);
 

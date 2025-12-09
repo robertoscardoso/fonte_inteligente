@@ -7,7 +7,6 @@ bool Energia::inicializado = false;
 
 Energia::Energia(uint8_t canal) : canal(canal)
 {
-    // Não inicializa aqui — o setup chamará inicializar()
 }
 
 // ---------------------------------------------------------
@@ -20,13 +19,11 @@ void Energia::inicializar()
 
         if (!adc.begin(0X48))
         {
-            Serial.println("❌ Erro ao inicializar o ADC externo (ADS1115)");
+            Serial.println("Erro ao inicializar o ADC externo (ADS1115)");
             return;
         }
-
-        adc.setGain(GAIN_ONE);
         inicializado = true;
-        Serial.println("✅ ADC externo (ADS1115) inicializado com sucesso!");
+        Serial.println("ADC externo (ADS1115) inicializado com sucesso!");
         delay(2000);
     }
 }
@@ -36,7 +33,7 @@ int16_t Energia::getValorBruto()
 {
     if (!inicializado)
     {
-        Serial.println("⚠️ ADC não inicializado!");
+        Serial.println("ADC não inicializado!");
         return 0;
     }
     return adc.readADC_SingleEnded(this->canal);
@@ -47,7 +44,7 @@ float Energia::getTensao()
 {
     if (!inicializado)
     {
-        Serial.println("⚠️ ADC não inicializado!");
+        Serial.println("ADC não inicializado!");
         return 0.0;
     }
 

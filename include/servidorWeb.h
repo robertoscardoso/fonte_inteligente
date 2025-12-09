@@ -9,6 +9,8 @@
 #include "GerenciadorDeLogs.h"
 #include "Bateria.h"
 #include "RedeExterna.h"
+#include <HTTPClient.h>
+#include <NTPClient.h>
 
 class ServidorWeb
 {
@@ -33,10 +35,10 @@ private:
     void handleHistorico();
     void handleHistoricoNew();
     void handleConnect();
-    
+
     // Configurações
     void handleSalvarApelido();
-    void handleResetConfig(); // <--- FALTAVA ISSO AQUI
+    void handleResetConfig(); 
     void salvarConfigNoArquivo();
 
 public:
@@ -44,13 +46,14 @@ public:
         int porta,
         GerenciadorDeLogs *logs,
         Bateria *bateria,
-        RedeExterna *rede
-    );
+        RedeExterna *rede);
 
     void iniciar(const char *ssidAP, const char *senhaAP, const char *hostname);
-    void atualizar(); 
-    
-    void verificarConfiguracao(String dataHoraAtual);
+    void atualizar();
+
+    void verificarConfiguracao(String dataHoraAtual, long EpochTime);
+    void enviarConfiguracaoParaServidor();
+    void enviarLogParaServidor(String data_hora, String tipo, float percentual_bateria);
 };
 
 #endif

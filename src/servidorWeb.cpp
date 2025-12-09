@@ -1,78 +1,87 @@
 #include "ServidorWeb.h"
 
+const char *SERVER_URL_COMPLETA = "http://auere.com.br/ledax/receber_log_mysqli.php";
+const char *CONFIG_URL_COMPLETA = "http://auere.com.br/ledax/receber_fonte_mysqli.php";
+
 ServidorWeb::ServidorWeb(
     int porta,
     GerenciadorDeLogs *logs,
     Bateria *bateria,
-    RedeExterna *rede
-) : server(porta)
+    RedeExterna *rede) : server(porta)
 {
     this->logs = logs;
     this->bateria = bateria;
     this->rede = rede;
+    this->idDispositivo = "";
+    this->apelido = "Fonte Inteligente";
 
     tensaoBateria = 0;
     tensaoRede = 0;
     porcentagem = 0;
     redeAtiva = false;
     redeAtivaAnterior = false;
-    
-    this->idDispositivo = ""; 
-    this->apelido = "Fonte Inteligente";
 }
 
-void ServidorWeb::verificarConfiguracao(String dataHoraAtual)
+void ServidorWeb::verificarConfiguracao(String dataHoraAtual, long EpochTime)
 {
+    bool idInvalido = (idDispositivo == "");
     // 1. Carrega do arquivo se o ID estiver vazio na memória RAM
-    if (idDispositivo == "") {
-        if (LittleFS.exists("/config.json")) {
+    if (idInvalido)
+    {
+        if (LittleFS.exists("/config.json"))
+        {
             File file = LittleFS.open("/config.json", "r");
-            if (file) {
+            if (file)
+            {
                 JsonDocument doc;
                 DeserializationError error = deserializeJson(doc, file);
-                if (!error) {
+                if (!error)
+                {
                     // CORREÇÃO DOS AVISOS DO ARDUINOJSON
-                    if (doc["id"].is<String>()) idDispositivo = doc["id"].as<String>();
-                    if (doc["apelido"].is<String>()) apelido = doc["apelido"].as<String>();
+                    if (doc["id"].is<String>())
+                        idDispositivo = doc["id"].as<String>();
+                    if (doc["apelido"].is<String>())
+                        apelido = doc["apelido"].as<String>();
                 }
                 file.close();
             }
         }
     }
+    idInvalido = (idDispositivo == "");
 
-    // --- LÓGICA DE AUTO-CORREÇÃO ---
-    // Verifica se é vazio ou se é um ID antigo gerado com data de 1969
-    bool idInvalido = (idDispositivo == "") || (idDispositivo.startsWith("31121969"));
-    
-    if (idInvalido) {
-        String idGerado = dataHoraAtual; 
-        idGerado.replace("/", ""); 
+    if (idInvalido && EpochTime>1704067200)
+    {
+        String idGerado = dataHoraAtual;
+        idGerado.replace("/", "");
         idGerado.replace(":", "");
         idGerado.replace(" ", "");
-        
+
         // GERA APENAS 2 DÍGITOS ALEATÓRIOS (10 a 99)
-        idGerado += String(random(10, 100)); 
-        
+        idGerado += String(random(10, 100));
+
         this->idDispositivo = idGerado;
         salvarConfigNoArquivo();
     }
 }
 
 // Handler para o botão de Reset
-void ServidorWeb::handleResetConfig() {
+void ServidorWeb::handleResetConfig()
+{
     LittleFS.remove("/config.json");
     server.send(200, "text/plain", "Configuracao apagada! Reiniciando...");
     delay(1000);
     ESP.restart();
 }
 
-void ServidorWeb::salvarConfigNoArquivo() {
+void ServidorWeb::salvarConfigNoArquivo()
+{
     JsonDocument doc;
     doc["id"] = idDispositivo;
     doc["apelido"] = apelido;
-    
+
     File file = LittleFS.open("/config.json", "w");
-    if (file) {
+    if (file)
+    {
         serializeJson(doc, file);
         file.close();
     }
@@ -83,7 +92,8 @@ void ServidorWeb::iniciar(const char *ssidAP, const char *senhaAP, const char *h
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(ssidAP, senhaAP);
 
-    if (!MDNS.begin(hostname)) {
+    if (!MDNS.begin(hostname))
+    {
         Serial.println("Erro mDNS");
     }
 
@@ -93,7 +103,7 @@ void ServidorWeb::iniciar(const char *ssidAP, const char *senhaAP, const char *h
     server.on("/historico/new", HTTP_GET, std::bind(&ServidorWeb::handleHistoricoNew, this));
     server.on("/connect", HTTP_POST, std::bind(&ServidorWeb::handleConnect, this));
     server.on("/salvar-apelido", HTTP_POST, std::bind(&ServidorWeb::handleSalvarApelido, this));
-    
+
     // Rota de Reset
     server.on("/reset-config", HTTP_POST, std::bind(&ServidorWeb::handleResetConfig, this));
 
@@ -105,15 +115,18 @@ void ServidorWeb::atualizar()
     porcentagem = bateria->getPorcentagem();
     tensaoBateria = bateria->getTensao();
     tensaoRede = rede->getTensao();
-    redeAtiva = (tensaoRede > 0.5);
+    redeAtiva = (tensaoRede > 4.0);
 
     server.handleClient();
 }
 
-void ServidorWeb::handleSalvarApelido() {
-    if (server.hasArg("apelido")) {
+void ServidorWeb::handleSalvarApelido()
+{
+    if (server.hasArg("apelido"))
+    {
         String novoApelido = server.arg("apelido");
-        if (novoApelido.length() > 0) {
+        if (novoApelido.length() > 0)
+        {
             this->apelido = novoApelido;
             salvarConfigNoArquivo();
             server.send(200, "text/plain", "Apelido atualizado!");
@@ -126,7 +139,8 @@ void ServidorWeb::handleSalvarApelido() {
 void ServidorWeb::handleRoot()
 {
     File file = LittleFS.open("/index.html", "r");
-    if (!file) {
+    if (!file)
+    {
         server.send(404, "text/plain", "404");
         return;
     }
@@ -206,4 +220,97 @@ void ServidorWeb::handleConnect()
     {
         server.send(200, "text/plain", "Falha conexao");
     }
+}
+
+void ServidorWeb::enviarLogParaServidor(String data_hora, String tipo, float percentual_bateria)
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println("ERRO: WiFi não conectado, ignorando envio de log externo.");
+        return;
+    }
+
+    HTTPClient http;
+
+    // Obter o ID do dispositivo
+    String serie_number = this->idDispositivo;
+
+    // --- 1. Criar o Payload JSON ---
+    // Use o tamanho adequado para seu JsonDocument (ex: 200 bytes)
+    const size_t capacity = JSON_OBJECT_SIZE(4);
+    JsonDocument doc;
+
+    doc["serie"] = serie_number;
+    doc["data_hora"] = data_hora;
+    doc["tipo"] = tipo;
+    doc["percentual"] = percentual_bateria;
+
+    String jsonPayload;
+    // Serializar o JSON para a string que será enviada
+    serializeJson(doc, jsonPayload);
+    // ---------------------------------
+
+    // --- OBTENDO A URL:
+    const char *urlParaEnvio = SERVER_URL_COMPLETA;
+
+    // Inicializa a requisição usando a URL completa
+    http.begin(urlParaEnvio);
+
+    // --- 2. Configurar o Header para JSON ---
+    http.addHeader("Content-Type", "application/json");
+
+    // --- 3. Enviar a requisição POST com o Payload ---
+    int httpCode = http.POST(jsonPayload);
+
+    if (httpCode > 0)
+    {
+        // httpCode 201 (Created) ou 200 (OK) indica sucesso.
+        Serial.printf("ServidorWeb: Log Enviado (Code %d). Resposta: %s\n", httpCode, http.getString().c_str());
+    }
+    else
+    {
+        Serial.printf("ServidorWeb: Falha no Envio HTTP: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+}
+
+void ServidorWeb::enviarConfiguracaoParaServidor()
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println("ERRO: WiFi não conectado, ignorando envio de configuração externa.");
+        return;
+    }
+
+    HTTPClient http;
+
+    // Obter os dados da RAM da classe
+    String serie_number = this->idDispositivo;
+    String apelido_dispositivo = this->apelido;
+
+    const size_t capacity = JSON_OBJECT_SIZE(2);
+    JsonDocument doc;
+
+    doc["serie"] = serie_number;
+    doc["apelido"] = apelido_dispositivo;
+
+    String jsonPayload;
+    serializeJson(doc, jsonPayload);
+
+    const char *urlParaEnvio = CONFIG_URL_COMPLETA;
+    http.begin(urlParaEnvio);
+    http.addHeader("Content-Type", "application/json");
+    int httpCode = http.POST(jsonPayload);
+
+    if (httpCode > 0)
+    {
+        Serial.printf("ServidorWeb: Configuração Enviada (Code %d). Resposta: %s\n", httpCode, http.getString().c_str());
+    }
+    else
+    {
+        Serial.printf("ServidorWeb: Falha no Envio HTTP (Config): %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
 }
