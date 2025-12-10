@@ -28,7 +28,9 @@ private:
 
     String idDispositivo;
     String apelido;
-
+    String ssidSta;
+    String passwordSta;
+    
     // Handlers (callbacks)
     void handleRoot();
     void handleData();

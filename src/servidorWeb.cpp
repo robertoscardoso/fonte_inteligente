@@ -14,6 +14,8 @@ ServidorWeb::ServidorWeb(
     this->rede = rede;
     this->idDispositivo = "";
     this->apelido = "Fonte Inteligente";
+    this->ssidSta = "";
+    this->passwordSta = "";
 
     tensaoBateria = 0;
     tensaoRede = 0;
@@ -78,6 +80,9 @@ void ServidorWeb::salvarConfigNoArquivo()
     JsonDocument doc;
     doc["id"] = idDispositivo;
     doc["apelido"] = apelido;
+    // SALVAR DADOS DA REDE
+    doc["ssid"] = ssidSta;
+    doc["pass"] = passwordSta;
 
     File file = LittleFS.open("/config.json", "w");
     if (file)
@@ -111,11 +116,20 @@ void ServidorWeb::iniciar(const char *ssidAP, const char *senhaAP, const char *h
                     idDispositivo = doc["id"].as<String>();
                 if (doc["apelido"].is<String>())
                     apelido = doc["apelido"].as<String>();
+
+                // CARREGAR DADOS DA REDE
+                if (doc["ssid"].is<String>())
+                    ssidSta = doc["ssid"].as<String>();
+                if (doc["pass"].is<String>())
+                    passwordSta = doc["pass"].as<String>();
             }
             file.close();
         }
     }
-
+    // TENTATIVA DE CONEXÃO AUTOMÁTICA
+    if (ssidSta.length() > 0) {
+        WiFi.begin(ssidSta.c_str(), passwordSta.c_str());
+    }
     server.on("/", std::bind(&ServidorWeb::handleRoot, this));
     server.on("/data", HTTP_GET, std::bind(&ServidorWeb::handleData, this));
     server.on("/historico", HTTP_GET, std::bind(&ServidorWeb::handleHistorico, this));
@@ -232,6 +246,11 @@ void ServidorWeb::handleConnect()
 
     if (conectado)
     {
+        // ATUALIZA E SALVA SE CONECTOU COM SUCESSO
+        this->ssidSta = ssid;
+        this->passwordSta = password;
+        salvarConfigNoArquivo();
+        
         String resposta = "Conectado: " + ssid + "\nIP: " + WiFi.localIP().toString();
         server.send(200, "text/plain", resposta);
     }
