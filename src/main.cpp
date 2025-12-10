@@ -10,6 +10,12 @@
 #include <LittleFS.h>
 #include "ServidorWeb.h"
 
+// --- CONFIGURAÇÕES DEEP SLEEP ---
+#define U_S_TO_S_FACTOR 1000000ULL  // Fator para converter segundos em microsegundos
+#define TIME_TO_SLEEP  300          // Tempo dormindo em segundos (5 minutos)
+#define LIMITE_BATERIA_CRITICA 2.9  // Tensão mínima da bateria para dormir
+#define LIMITE_REDE_OFF 4.0         // Tensão abaixo disso considera rede desligada
+
 #define CAMINHO_DB "/littlefs/log_energia.db"
 
 const char *hostname = "fonteinteligente";
@@ -40,10 +46,30 @@ String obterDataHoraFormatada(NTPClient &client)
     return String(buffer);
 }
 
+void verificarDeepSleep() {
+    float tensaoBat = B_18650.getTensao();
+    float tensaoRede = tomada.getTensao();
+
+    // Se Bateria <= 2.9V E Rede estiver desligada (< 4.0V)
+    if (tensaoBat <= LIMITE_BATERIA_CRITICA && tensaoRede < LIMITE_REDE_OFF) {
+        Serial.println("!!! BATERIA CRITICA E SEM REDE !!!");
+        Serial.printf("Bat: %.2fV | Rede: %.2fV. Dormindo por 5min...\n", tensaoBat, tensaoRede);
+        // garante que o BuckBooster não seja energizado 
+        pinMode(pinoBuckBooster, OUTPUT);
+        digitalWrite(pinoBuckBooster, HIGH); 
+
+        // Configura o timer e dorme
+        esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * U_S_TO_S_FACTOR);
+        esp_deep_sleep_start();
+    }
+}
+
 void setup()
 {
     Serial.begin(115200);
     Serial.println("\nSistema Iniciado");
+    Energia::inicializar();
+    verificarDeepSleep();//verifica se deve dormir 
 
     if (!LittleFS.begin())
     {
@@ -54,7 +80,7 @@ void setup()
 
     servidor.iniciar(ssid, password, hostname);
     servidor.enviarConfiguracaoParaServidor();
-    Energia::inicializar();
+    
     pinMode(pinoBuckBooster, OUTPUT);
     digitalWrite(pinoBuckBooster, LOW);
     timeClient.begin();
@@ -70,6 +96,8 @@ void setup()
 
 void loop()
 {
+    verificarDeepSleep();
+
     servidor.atualizar();
 
     float porcentagem = B_18650.getPorcentagem();
