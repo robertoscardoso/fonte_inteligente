@@ -11,10 +11,10 @@
 #include "ServidorWeb.h"
 
 // --- CONFIGURAÇÕES DEEP SLEEP ---
-#define U_S_TO_S_FACTOR 1000000ULL  // Fator para converter segundos em microsegundos
-#define TIME_TO_SLEEP  30          // Tempo dormindo em segundos (5 minutos)
-#define LIMITE_BATERIA_CRITICA 2.9  // Tensão mínima da bateria para dormir
-#define LIMITE_REDE_OFF 4.0         // Tensão abaixo disso considera rede desligada
+#define U_S_TO_S_FACTOR 1000000ULL // Fator para converter segundos em microsegundos
+#define TIME_TO_SLEEP 30           // Tempo dormindo em segundos (5 minutos)
+#define LIMITE_BATERIA_CRITICA 2.9 // Tensão mínima da bateria para dormir
+#define LIMITE_REDE_OFF 4.0        // Tensão abaixo disso considera rede desligada
 
 #define CAMINHO_DB "/littlefs/log_energia.db"
 
@@ -27,7 +27,7 @@ unsigned long lastUpdateTime = 0;
 bool redeExternaEstavaAtiva = false;
 bool verificado = false;
 
-//Trava para impedir oscilação em bateria baixa
+// Trava para impedir oscilação em bateria baixa
 bool bloqueioBateriaCritica = false;
 
 Bateria B_18650(1, 4.0, 3.1);
@@ -49,17 +49,19 @@ String obterDataHoraFormatada(NTPClient &client)
     return String(buffer);
 }
 
-void verificarDeepSleep() {
+void verificarDeepSleep()
+{
     float tensaoBat = B_18650.getTensao();
     float tensaoRede = tomada.getTensao();
 
     // Se Bateria <= 2.9V E Rede estiver desligada (< 4.0V)
-    if (tensaoBat <= LIMITE_BATERIA_CRITICA && tensaoRede < LIMITE_REDE_OFF) {
+    if (tensaoBat <= LIMITE_BATERIA_CRITICA && tensaoRede < LIMITE_REDE_OFF)
+    {
         Serial.println("!!! BATERIA CRITICA E SEM REDE !!!");
         Serial.printf("Bat: %.2fV | Rede: %.2fV. Dormindo por 5min...\n", tensaoBat, tensaoRede);
-        // garante que o BuckBooster não seja energizado 
+        // garante que o BuckBooster não seja energizado
         pinMode(pinoBuckBooster, OUTPUT);
-        digitalWrite(pinoBuckBooster, HIGH); 
+        digitalWrite(pinoBuckBooster, HIGH);
 
         // Configura o timer e dorme
         esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * U_S_TO_S_FACTOR);
@@ -72,7 +74,7 @@ void setup()
     Serial.begin(115200);
     Serial.println("\nSistema Iniciado");
     Energia::inicializar();
-    verificarDeepSleep();//verifica se deve dormir 
+    verificarDeepSleep(); // verifica se deve dormir
 
     if (!LittleFS.begin())
     {
@@ -83,7 +85,7 @@ void setup()
 
     servidor.iniciar(ssid, password, hostname);
     servidor.enviarConfiguracaoParaServidor();
-    
+
     pinMode(pinoBuckBooster, OUTPUT);
     digitalWrite(pinoBuckBooster, LOW);
     timeClient.begin();
@@ -111,33 +113,34 @@ void loop()
     {
         timeClient.update();
         // --- NOVA LÓGICA COM DETECÇÃO DE TROCA DE BATERIA ---
-        
+
         // Lê a tensão atual da bateria (necessário para identificar a troca)
         float tensaoAtualBateria = B_18650.getTensao();
 
         // 1. DESBLOQUEIO:
         // Destrava se a rede externa voltou OU se a tensão da bateria subiu subitamente (> 4.0V)
         // Isso indica que uma bateria carregada foi inserida.
-        if (redeExternaAtiva || tensaoAtualBateria > 4.0) {
+        if (redeExternaAtiva || tensaoAtualBateria > 4.0)
+        {
             bloqueioBateriaCritica = false;
         }
 
         // 2. BLOQUEIO (TRAVA):
         // Se a bateria zerou e não tem rede, ativa a trava.
-        if (porcentagem == 0 && !redeExternaAtiva) {
+        if (porcentagem == 0 && !redeExternaAtiva)
+        {
             bloqueioBateriaCritica = true;
         }
 
         // 3. ATUAÇÃO NO PINO:
-        if (bloqueioBateriaCritica || (porcentagem == 0 && !redeExternaAtiva)) 
+        if (bloqueioBateriaCritica || (porcentagem == 0 && !redeExternaAtiva))
         {
-             digitalWrite(pinoBuckBooster, HIGH); // Mantém Desligado
+            digitalWrite(pinoBuckBooster, HIGH); // Mantém Desligado
         }
-        else 
+        else
         {
-             digitalWrite(pinoBuckBooster, LOW);  // Liga (Sistema Normal)
+            digitalWrite(pinoBuckBooster, LOW); // Liga (Sistema Normal)
         }
-        
 
         if ((epochTime > 1704067200) && !verificado)
         {
@@ -162,16 +165,19 @@ void loop()
                 B_18650.setStatus(ATIVADA);
                 tipo_evento = "QUEDA";
             }
+            if ((epochTime > 1704067200))
+            {
+                gerenciadorDeLogs.registrarEvento(dataHoraAtual, tipo_evento, porcentagem);
+            }
 
-            gerenciadorDeLogs.registrarEvento(dataHoraAtual, tipo_evento, porcentagem);
             // servidor.enviarLogParaServidor(dataHoraAtual, tipo_evento, porcentagem);
             redeExternaEstavaAtiva = redeExternaAtiva;
         }
         // --- NOVO CÓDIGO PARA IMPRIMIR O ESTADO DO PINO ---
         int estadoPinoBuck = digitalRead(pinoBuckBooster);
-        Serial.printf("Pino Buck Booster (GPIO %d) Estado: %s\n", 
-                       pinoBuckBooster, 
-                       (estadoPinoBuck == HIGH ? "HIGH (OFF)" : "LOW (ON)"));
+        Serial.printf("Pino Buck Booster (GPIO %d) Estado: %s\n",
+                      pinoBuckBooster,
+                      (estadoPinoBuck == HIGH ? "HIGH (OFF)" : "LOW (ON)"));
         // ---------------------------------------------------
         lastUpdateTime = millis();
     }
