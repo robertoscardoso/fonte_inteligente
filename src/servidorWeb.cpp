@@ -63,6 +63,7 @@ void ServidorWeb::verificarConfiguracao(String dataHoraAtual, long EpochTime)
 
         this->idDispositivo = idGerado;
         salvarConfigNoArquivo();
+        enviarConfiguracaoParaServidor();
     }
 }
 
@@ -80,6 +81,7 @@ void ServidorWeb::salvarConfigNoArquivo()
     JsonDocument doc;
     doc["id"] = idDispositivo;
     doc["apelido"] = apelido;
+    enviarConfiguracaoParaServidor();
     // SALVAR DADOS DA REDE
     doc["ssid"] = ssidSta;
     doc["pass"] = passwordSta;
