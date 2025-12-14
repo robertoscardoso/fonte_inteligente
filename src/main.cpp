@@ -168,9 +168,10 @@ void loop()
             if ((epochTime > 1704067200))
             {
                 gerenciadorDeLogs.registrarEvento(dataHoraAtual, tipo_evento, porcentagem);
+                // servidor.enviarLogParaServidor(dataHoraAtual, tipo_evento, porcentagem);
             }
 
-            // servidor.enviarLogParaServidor(dataHoraAtual, tipo_evento, porcentagem);
+            
             redeExternaEstavaAtiva = redeExternaAtiva;
         }
         // --- NOVO CÓDIGO PARA IMPRIMIR O ESTADO DO PINO ---

@@ -23,6 +23,7 @@ void Energia::inicializar()
             return;
         }
         inicializado = true;
+        adc.setGain(GAIN_TWOTHIRDS);
         Serial.println("ADC externo (ADS1115) inicializado com sucesso!");
         delay(2000);
     }
